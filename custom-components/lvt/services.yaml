@@ -1,0 +1,80 @@
+say:
+  name: Say
+  description: Say something with LVT speaker
+  # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area.
+  # If `target` is specified, `entity_id` should not be defined in the `fields` map.
+  # By default it shows only targets matching entities from the same domain as the service,
+  # but if further customization is required, target supports the entity, device, and area selectors
+  # (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically
+  # be applied to device and area, and device selector parameters will automatically be applied to area.
+
+  # target:
+  #   device:
+  #     integration: lvt
+  #   entity: none
+
+  fields:
+    text:
+      name: Text
+      description: Text to say.
+      required: true
+      selector:
+        text:
+    importance:
+      name: Message importance
+      description: ...to respect speaker filter settings
+      required: true
+      default: "1: Informational message"
+      selector:
+        select:
+          options:
+            - "0: Common chattering"
+            - "1: Informational message"
+            - "2: Important message"
+            - "3: Critically important message"
+    speaker:
+      name: Speaker ID
+      description: Leave empty to say message an ALL speakers according to important filtering
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+
+# say_action:
+#   name: Say action
+#   description: Send a TTS message to Snips to listen for a response.
+#   fields:
+#     can_be_enqueued:
+#       name: Can be enqueued
+#       description: If True, session waits for an open session to end, if False session is dropped if one is running
+#       default: true
+#       selector:
+#         boolean:
+#     custom_data:
+#       name: Custom data
+#       description: custom data that will be included with all messages in this session
+#       example: user=UserName
+#       default: ''
+#       selector:
+#         text:
+#     intent_filter:
+#       name: Intent filter
+#       description: Optional Array of Strings - A list of intents names to restrict the NLU resolution to on the first query.
+#       example: "turnOnLights, turnOffLights"
+#       selector:
+#         object:
+#     site_id:
+#       name: Site ID
+#       description: Site to use to start session, defaults to default.
+#       example: bedroom
+#       default: default
+#       selector:
+#         text:
+#     text:
+#       name: Text
+#       description: Text to say
+#       required: true
+#       example: My name is snips
+#       selector:
+#         text:

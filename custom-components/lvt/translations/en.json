@@ -1,0 +1,22 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "LVT is already configured",
+            "not_setup": "Not yet configured"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect. Please check connection settings",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "server": "LVT Server Address",
+                    "port": "API Port Number",
+                    "password": "Password",
+                    "not_in_use": "Not in use with YAML"
+                }
+            }
+        }
+    }
+}

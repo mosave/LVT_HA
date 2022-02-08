@@ -1,0 +1,11 @@
+{
+  "state": {
+    "importance__filter": {
+      "0": "0: All chattering",
+      "1": "1: Informational messages",
+      "2": "2: Important messages",
+      "3": "3: Critical messages only",
+      "4": "4: Keep speaker silent"
+    }
+  }
+}

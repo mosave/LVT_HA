@@ -1,0 +1,15 @@
+{
+  "domain": "lvt",
+  "name": "Lite Voice Terminal",
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/lvt",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "dependencies": [],
+  "codeowners": [
+    "@mosave"
+  ],
+  "iot_class": "local_push"
+}
