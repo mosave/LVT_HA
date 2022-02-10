@@ -1,0 +1,11 @@
+{
+  "name": "Lite Voice Terminal",
+  "domains": [
+    "binary_sensor",
+    "number", 
+    "select"
+  ],
+  "country": ["RU", "BY", "UK"],
+  "iot_class": "local push",
+  "render_readme": true
+}
