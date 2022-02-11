@@ -5,38 +5,36 @@ from .lvt import LvtApi
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.discovery import async_load_platform
-from .const import DOMAIN, CONFIG_TYPE_YAML, CONFIG_TYPE_ENTRY, LVT_PLATFORMS
+from .const import DOMAIN, LVT_PLATFORMS
 
 
-async def async_initialize(hass: HomeAssistant, config_type: int, config: dict) -> bool:
-    if DOMAIN in hass.data:
-        lvt: LvtApi = hass.data[DOMAIN]
-        lvt.configure(
-            config["server"] if "server" in config else None,
+async def async_initialize(hass: HomeAssistant, config) -> bool:
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = LvtApi(hass)
+
+    lvt: LvtApi = hass.data[DOMAIN]
+
+    # if lvt intents are in config:
+    #     lvt.configure_intents
+    #
+
+    if "server" in config and "password" in config:
+        lvt.configure_connection(
+            config["server"],
             config["port"] if "port" in config else None,
-            config["password"] if "password" in config else None,
+            config["password"],
         )
-    else:
-        hass.data[DOMAIN] = lvt = LvtApi(
-            hass,
-            config["server"] if "server" in config else None,
-            config["port"] if "port" in config else None,
-            config["password"] if "password" in config else None,
-        )
-
-    lvt.config_type = config_type
 
     return True
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+async def async_setup(hass: HomeAssistant, config) -> bool:
     """Set up Lite Voice Terminal using configuration in yaml"""
     if config is None:
         return False
     if DOMAIN not in config:
         return True
-
-    _ok = await async_initialize(hass, CONFIG_TYPE_YAML, config[DOMAIN])
+    _ok = await async_initialize(hass, config[DOMAIN])
     if _ok:
         for platform in LVT_PLATFORMS:
             hass.async_create_task(
@@ -48,9 +46,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Set up Lite Voice Terminal using a config entry (with UI)"""
     config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
-    _ok = await async_initialize(
-        hass, CONFIG_TYPE_ENTRY, {**config_entry.data, **config_entry.options}
-    )
+    _ok = await async_initialize(hass, {**config_entry.data, **config_entry.options})
 
     if _ok:
         for platform in LVT_PLATFORMS:
@@ -62,9 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
 
 async def async_update_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Re-configure Lite Voice Terminal using a config entry (with UI)"""
-    return await async_initialize(
-        hass, CONFIG_TYPE_ENTRY, {**config_entry.data, **config_entry.options}
-    )
+    return await async_initialize(hass, {**config_entry.data, **config_entry.options})
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -72,8 +66,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, LVT_PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].stop()
-        hass.data.pop(DOMAIN)
-
+        del hass.data[DOMAIN]
     return unload_ok
 
 

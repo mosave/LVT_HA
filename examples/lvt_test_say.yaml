@@ -1,0 +1,18 @@
+script:
+  script_lvt_test_say:
+    alias: LVT test say
+    sequence:
+      - service: lvt.say
+        data:
+          importance: '2: Important message'
+          say: 
+            - тесто
+            - Вторая фраза
+            - третья фраза
+            - четвертый вариант тестовой фразы
+          speaker: 
+            - ea6296e6dbf37ab7c116e12ef222161e
+            - speaker2
+            - number.lvt_speaker4_volume]
+
+

@@ -3,14 +3,14 @@
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LVT_PLATFORMS, VOLUME_TITLE
+from .const import DOMAIN, VOLUME_TITLE
 from .lvt_entity import LvtEntity
 
 LVT_NUMBER_ADD_ENTITIES: AddEntitiesCallback = None
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the Demo config entry."""
+    """Set up the LVT Speaker "number" config entry."""
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
@@ -19,12 +19,12 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     global LVT_NUMBER_ADD_ENTITIES
     LVT_NUMBER_ADD_ENTITIES = async_add_entities
     lvt_api = hass.data[DOMAIN]
-    for _, speaker in lvt_api.speakers.items():
-        speaker.entities["volume"] = LvtVolumeEntity(hass, speaker)
 
-    lvt_api.loaded_platforms.add("number")
-    if set(lvt_api.loaded_platforms) == set(LVT_PLATFORMS):
-        lvt_api.start()
+    for _, speaker in lvt_api.speakers.items():
+        if "volume" not in speaker.entities:
+            speaker.entities["volume"] = LvtVolumeEntity(hass, speaker)
+
+    lvt_api.platform_loaded("number")
 
 
 class LvtVolumeEntity(NumberEntity, LvtEntity):

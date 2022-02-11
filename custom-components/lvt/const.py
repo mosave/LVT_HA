@@ -16,10 +16,6 @@ SERVER_ONLINESTATUS_TITLE = "LVT Server Online status"
 DISCOVERY_TASK = "lvt_discovery_task"
 
 
-CONFIG_TYPE_YAML = 0
-CONFIG_TYPE_ENTRY = 1
-
-
 def lvt_unique_id(speaker_id: str, e_id: str) -> str:
     eid = DOMAIN + "_"
     if speaker_id is not None:

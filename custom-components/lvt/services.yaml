@@ -1,30 +1,21 @@
-say:
-  name: Say
-  description: Say something with LVT speaker
-  # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area.
-  # If `target` is specified, `entity_id` should not be defined in the `fields` map.
-  # By default it shows only targets matching entities from the same domain as the service,
-  # but if further customization is required, target supports the entity, device, and area selectors
-  # (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically
-  # be applied to device and area, and device selector parameters will automatically be applied to area.
 
-  # target:
-  #   device:
-  #     integration: lvt
-  #   entity: none
+##################################################################################################
+play:
+  name: Play sound effect
+  description: Play sound effect from library on LVT speaker
 
   fields:
-    text:
-      name: Text
-      description: Text to say.
+    play:
+      name: Sound effect name
+      description: Sound effect name. Consult LVT configuration to list available sound effects
       required: true
       selector:
         text:
     importance:
       name: Message importance
-      description: ...to respect speaker filter settings
-      required: true
-      default: "1: Informational message"
+      description: Respect speaker importance filter settings
+      required: false
+      default: "0: Common chattering"
       selector:
         select:
           options:
@@ -33,12 +24,319 @@ say:
             - "2: Important message"
             - "3: Critically important message"
     speaker:
-      name: Speaker ID
-      description: Leave empty to say message an ALL speakers according to important filtering
+      name: "[List of] speaker IDs"
+      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
       required: false
       selector:
         device:
           integration: lvt
+
+##################################################################################################
+say:
+  name: Say
+  description: Say something with LVT speaker
+
+  fields:
+    say:
+      name: Text to say
+      description: Text to say.
+      required: true
+      selector:
+        text:
+    importance:
+      name: Message importance
+      description: Respect speaker importance filter settings
+      required: false
+      default: "0: Common chattering"
+      selector:
+        select:
+          options:
+            - "0: Common chattering"
+            - "1: Informational message"
+            - "2: Important message"
+            - "3: Critically important message"
+    speaker:
+      name: List of speaker IDs
+      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+
+##################################################################################################
+confirm:
+  name: Ask for confirmation
+  description: Simple agree / disagree dialogue
+
+  fields:
+    say:
+      name: Confirmation request
+      description: Confirmation request text
+      required: true
+      selector:
+        text:
+
+    prompt:
+      name: Prompt
+      description: Periodical reminder awaiting user reaction
+      required: false
+      selector:
+        text:
+
+    ### YES
+    yes_intent:
+      name: YES intent name
+      description: Intent name to fire if user answered positive
+      required: true
+      selector:
+        text:
+
+    yes_say:
+      name: Positive confirmation
+      description: Text to confirm positive answer
+      required: false
+      selector:
+        text:
+
+    ### NO
+    no_intent:
+      name: NO intent name
+      description: Intent name to fire on negative answer
+      required: true
+      selector:
+        text:
+
+    no_say:
+      name: Negative confirmation
+      description: Text to confirm negative answer
+      required: false
+      selector:
+        text:
+
+
+    ### DEFAULT
+    default_timeout:
+      name: Timeout
+      description: Time (seconds) to wait user answer
+      required: true
+      default: 30
+
+      selector:
+        number:
+          min: 10
+          max: 600
+          unit_of_measurement: "seconds"
+
+    default_intent:
+      name: Default intent name
+      description: Intent name to fire if user not answered befor timeout
+      required: true
+      selector:
+        text:
+
+    default_say:
+      name: Cancel confirmation
+      description: Text to confirm default value
+      required: false
+      selector:
+        text:
+
+    importance:
+      name: Importance level
+      description: Respect speaker importance filter settings
+      required: false
+      default: "0: Common chattering"
+      selector:
+        select:
+          options:
+            - "0: Common chattering"
+            - "1: Informational message"
+            - "2: Important message"
+            - "3: Critically important message"
+
+    speaker:
+      name: List of speaker IDs
+      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+
+
+##################################################################################################
+negotiate:
+  name: Negotiate
+  description: Ask person to choose one of pre-defined options
+
+  fields:
+    say:
+      name: Text to say
+      description: Text to say.
+      required: true
+      selector:
+        text:
+    importance:
+      name: Importance level
+      description: Respect speaker importance filter settings
+      required: false
+      default: "0: Common chattering"
+      selector:
+        select:
+          options:
+            - "0: Common chattering"
+            - "1: Informational message"
+            - "2: Important message"
+            - "3: Critically important message"
+    speaker:
+      name: List of speaker IDs
+      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+
+    ### OPTION 1
+    option_1_intent:
+      name: Option 1 intent name
+      description: Intent name to fire if user choose this option
+      required: true
+      selector:
+        text:
+
+    option_1_utterance:
+      name: Option 1 utterance phrase
+      description: Utterance phrase
+      required: true
+      selector:
+        text:
+
+    option_1_say:
+      name: Option 1 choosen confirmation message
+      description: Text to confirm selection of this option
+      required: false
+      selector:
+        text:
+
+    ### OPTION 2
+    option_2_intent:
+      name: Option 2 intent name
+      description: Intent name to fire if user choose this option
+      required: true
+      selector:
+        text:
+
+    option_2_utterance:
+      name: Option 2 utterance phrase
+      description: Utterance phrase
+      required: true
+      selector:
+        text:
+
+    option_2_say:
+      name: Option 2 choosen confirmation message
+      description: Text to confirm selection of this option
+      required: false
+      selector:
+        text:
+
+    ### OPTION 3
+    option_3_intent:
+      name: Option 3 intent name
+      description: Intent name to fire if user choose this option
+      required: true
+      selector:
+        text:
+
+    option_3_utterance:
+      name: Option 3 utterance phrase
+      description: Utterance phrase
+      required: true
+      selector:
+        text:
+
+    option_3_say:
+      name: Option 3 choosen confirmation message
+      description: Text to confirm selection of this option
+      required: false
+      selector:
+        text:
+
+    ### OPTION 4
+    option_4_intent:
+      name: Option 4 intent name
+      description: Intent name to fire if user choose this option
+      required: true
+      selector:
+        text:
+
+    option_4_utterance:
+      name: Option 4 utterance phrase
+      description: Utterance phrase
+      required: true
+      selector:
+        text:
+
+    option_4_say:
+      name: Option 4 choosen confirmation message
+      description: Text to confirm selection of this option
+      required: false
+      selector:
+        text:
+
+    ### OPTION 1
+    option_5_intent:
+      name: Option 5 intent name
+      description: Intent name to fire if user choose this option
+      required: true
+      selector:
+        text:
+
+    option_5_utterance:
+      name: Option 5 utterance phrase
+      description: Utterance phrase
+      required: true
+      selector:
+        text:
+
+    option_5_say:
+      name: Option 5 choosen confirmation message
+      description: Text to confirm selection of this option
+      required: false
+      selector:
+        text:
+
+    ### DEFAULT
+    default_timeout:
+      name: Timeout
+      description: Time (seconds) to wait user answer
+      required: true
+      default: 30
+
+      selector:
+        number:
+          min: 10
+          max: 600
+          unit_of_measurement: "seconds"
+
+    default_intent:
+      name: Default intent name
+      description: Intent name to fire if user not answered befor timeout
+      required: true
+      selector:
+        text:
+
+    default_say:
+      name: Cancel confirmation
+      description: Text to confirm default value
+      required: false
+      selector:
+        text:
+
+
+
 
 
 # say_action:
@@ -56,25 +354,5 @@ say:
 #       description: custom data that will be included with all messages in this session
 #       example: user=UserName
 #       default: ''
-#       selector:
-#         text:
-#     intent_filter:
-#       name: Intent filter
-#       description: Optional Array of Strings - A list of intents names to restrict the NLU resolution to on the first query.
-#       example: "turnOnLights, turnOffLights"
-#       selector:
-#         object:
-#     site_id:
-#       name: Site ID
-#       description: Site to use to start session, defaults to default.
-#       example: bedroom
-#       default: default
-#       selector:
-#         text:
-#     text:
-#       name: Text
-#       description: Text to say
-#       required: true
-#       example: My name is snips
 #       selector:
 #         text:

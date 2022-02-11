@@ -1,0 +1,15 @@
+script:
+  script_lvt_test_play:
+    alias: LVT test play
+    sequence:
+      - service: lvt.play
+        data:
+          importance: 3
+          sound: ding
+          speaker: 
+            - bedroom
+            - ea6296e6dbf37ab7c116e12ef222161e
+            - speaker2
+            - number.lvt_speaker4_volume]
+
+

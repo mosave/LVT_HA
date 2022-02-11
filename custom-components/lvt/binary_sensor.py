@@ -3,13 +3,9 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import HomeAssistantType
-
-from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     DOMAIN,
-    LVT_PLATFORMS,
     ONLINESTATUS_TITLE,
     SERVER_ONLINESTATUS_TITLE,
 )
@@ -18,25 +14,25 @@ from .lvt_entity import LvtEntity
 LVT_BINARY_SENSOR_ADD_ENTITIES: AddEntitiesCallback = None
 
 
-async def async_setup_entry(
-    hass: HomeAssistantType, config_entry: ConfigEntry, async_add_entities
-):
-    """Set up the Demo config entry."""
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Set up the LVT Speaker "binary_sensor" config entry."""
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the LVT Speaker binary sensor platform."""
+    """Set up the LVT Speaker binary_sensor platform."""
     global LVT_BINARY_SENSOR_ADD_ENTITIES
     LVT_BINARY_SENSOR_ADD_ENTITIES = async_add_entities
     lvt_api = hass.data[DOMAIN]
-    lvt_api.entities["online"] = LvtOnlineEntity(hass, None)
-    for _, speaker in lvt_api.speakers.items():
-        speaker.entities["online"] = LvtOnlineEntity(hass, speaker)
 
-    lvt_api.loaded_platforms.add("binary_sensor")
-    if set(lvt_api.loaded_platforms) == set(LVT_PLATFORMS):
-        lvt_api.start()
+    if "online" not in lvt_api.entities:
+        lvt_api.entities["online"] = LvtOnlineEntity(hass, None)
+
+    for _, speaker in lvt_api.speakers.items():
+        if "online" not in speaker.entities:
+            speaker.entities["online"] = LvtOnlineEntity(hass, speaker)
+
+    lvt_api.platform_loaded("binary_sensor")
 
 
 class LvtOnlineEntity(BinarySensorEntity, LvtEntity):

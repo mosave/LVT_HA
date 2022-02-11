@@ -1,0 +1,18 @@
+script:
+  script_lvt_test_confirm:
+    alias: LVT test confirm
+    sequence:
+      - service: lvt.confirm
+        data:
+          importance: '2: Important message'
+          text: 
+            - тесто
+            - Второй тест
+            - третий тест
+            - четвертый тест
+          speaker: 
+            - ea6296e6dbf37ab7c116e12ef222161e
+            - speaker2
+            - number.lvt_speaker4_volume]
+
+

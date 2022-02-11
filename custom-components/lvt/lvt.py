@@ -9,11 +9,10 @@ import time
 
 import aiohttp
 
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from .const import DOMAIN, LVT_PLATFORMS
 from .lvt_speaker import LvtSpeaker
-from .const import DOMAIN, CONFIG_TYPE_YAML
 
 # region Constants
 # API Server Authorization
@@ -28,8 +27,18 @@ MSG_API_SPEAKER_STATUS = "Status"
 # Установить громкость
 MSG_API_VOLUME = "Volume"
 
+# Проиграть звуковой эффект
+MSG_API_PLAY = "Play"
+
 # Проговорить текст
 MSG_API_SAY = "Say"
+
+# Запустить диалог подтверждения
+MSG_API_CONFIRM = "Confirm"
+
+# Запустить диалог выбора варианта из списка возможных
+MSG_API_NEGOTIATE = "Negotiate"
+
 
 # endregion
 
@@ -39,14 +48,10 @@ _LOGGER = logging.getLogger(__name__)
 class LvtApi:
     """LVT API class."""
 
-    config_type = CONFIG_TYPE_YAML
     # region __init__ / __del__
     def __init__(
         self,
         hass: HomeAssistantType,
-        server: str,
-        port: int,
-        password: str,
     ) -> None:
         """Constructor"""
         self._api_id = str(random.randrange(100, 999))
@@ -54,24 +59,34 @@ class LvtApi:
         self.session = async_get_clientsession(hass, verify_ssl=False)
         self.__entities = {}
         self.__speakers = {}
-        self.async_add_entities: AddEntitiesCallback = None
+        self.__server = None
+        self.__port = None
+        self.__password = None
         self.__online = False
         self.__client_task = None
         self.__ws = None
         self.__queue = []
         self.__speakers_synced = time.time()
         self.__wstask_id = str(random.randrange(100, 999))
-        self.create_registered_speakers()
+        hass.services.async_register(DOMAIN, "play", self.handle_play)
         hass.services.async_register(DOMAIN, "say", self.handle_say)
+        hass.services.async_register(DOMAIN, "confirm", self.handle_confirm)
+        hass.services.async_register(DOMAIN, "negotiate", self.handle_negotiate)
+        self.__loaded_platforms = set()
 
-        self.configure(server, port, password)
+        self.start()
+
+        # self.configure(server, port, password)
 
     def __del__(self):
         """Destructor (just in case)"""
         self.stop()
+        self.hass.services.async_remove(DOMAIN, "play")
         self.hass.services.async_remove(DOMAIN, "say")
+        self.hass.services.async_remove(DOMAIN, "confirm")
+        self.hass.services.async_remove(DOMAIN, "negotiate")
 
-    def configure(
+    def configure_connection(
         self,
         server: str,
         port: int,
@@ -83,8 +98,18 @@ class LvtApi:
         self.__authorized = False
         self.__server = server if server is not None else "127.0.0.1"
         self.__port = port if port is not None else 7999
-        self.__password = password
-        self.loaded_platforms = set()
+        self.__password = password if password is not None else ""
+        self.__loaded_platforms = set()
+        self.create_registered_speakers()
+        self.start()
+
+    def configure_intents(self):
+        # process and check intents passed
+        if self.online:
+            pass
+
+    def platform_loaded(self, platform):
+        self.__loaded_platforms.add(platform)
 
     # endregion
 
@@ -117,6 +142,10 @@ class LvtApi:
     @property
     def online(self) -> bool:
         return self.__online
+
+    @property
+    def platforms_loaded(self) -> bool:
+        return set(self.__loaded_platforms) != set(LVT_PLATFORMS)
 
     @online.setter
     def online(self, is_online: bool):
@@ -175,12 +204,6 @@ class LvtApi:
 
         self.__queue.append(message)
 
-    # def send_speaker_status(self, speaker_id: str, volume: int):
-    #     if speaker_id in self.speakers:
-    #         volume = int(volume)
-    #         volume = 0 if volume < 0 else (100 if volume > 100 else volume)
-    #         self.send_message(MSG_API_VOLUME, data={str(speaker_id): volume})
-
     def synchronize_speakers(self):
         self.__speakers_synced = time.time()
         data = {}
@@ -191,6 +214,26 @@ class LvtApi:
             self.send_message(MSG_API_SPEAKER_STATUS, data=data)
 
     async def __websock_client(self):
+        self.logDebug(
+            "Waiting for configuration and loading platforms: %s", LVT_PLATFORMS
+        )
+        session_started = time.time()
+        error_reported = False
+        while (
+            self.platforms_loaded
+            or not bool(self.__server)
+            or not bool(self.__port)
+            or not bool(self.__password)
+        ):
+            if ((time.time() - session_started) > 30) and not error_reported:
+                error_reported = True
+                if self.platforms_loaded:
+                    self.logError("Not all LVT platforms loaded!")
+                else:
+                    self.logError(
+                        "Missing Lite Voice Terminal connection config. Please consult LVT documentation"
+                    )
+            await asyncio.sleep(0.5)
         while True:
             self.online = False
             try:
@@ -350,7 +393,7 @@ class LvtApi:
         if registry is not None:
             for _, device in registry.devices.items():
                 domain, speaker_id = list(device.identifiers)[0]
-                if domain == DOMAIN:
+                if domain == DOMAIN and (speaker_id not in self.speakers):
                     self.speakers[speaker_id] = LvtSpeaker(
                         self.hass, speaker_id, self.online
                     )
@@ -359,29 +402,147 @@ class LvtApi:
 
     # endregion
 
+    # region parse_speakers
+    def parse_speakers(self, speakers, active_only=True):
+        """Resolve (list of) speaker IDs. Accepted values are:
+        - speaker id
+        - HA device id
+        - ID/UID
+        """
+
+        all_speakers = []
+        for _, speaker in self.speakers.items():
+            if not active_only or speaker.online and speaker.volume > 0:
+                all_speakers.append(speaker)
+
+        if not bool(speakers):
+            return all_speakers
+
+        if isinstance(speakers, dict):
+            speaker_ids = list(speakers.keys())
+        else:
+            speaker_ids = list(speakers)
+
+        parsed_speakers = []
+
+        for speaker_id in speaker_ids:
+            id1 = str(speaker_id)
+
+            a = id1.find("lvt_")
+            b = id1.rfind("_")
+            id2 = id1[a + 4 : b] if a >= 0 and b > a + 4 else None
+
+            for speaker in all_speakers:
+                if speaker not in parsed_speakers:
+                    if (
+                        speaker.device is not None
+                        and (speaker.device.id == str(id1))
+                        or speaker.id == id1
+                        or speaker.id == id2
+                    ):
+                        parsed_speakers.append(speaker)
+        return parsed_speakers
+
+    # endregion
+
+    # region get_call_XXXX()
+    def get_call_importance(self, call):
+        """Retrieve call importance from LVT service call"""
+        i = int(list(str(str(call.data.get("importance", 0)) + ":").partition(":"))[0])
+        return 0 if i < 0 else 3 if i > 3 else i
+
+    def get_call_speakers(self, call):
+        """Retrieve list of speaker IDs for LVT call respecting importance and speaker status"""
+        importance = self.get_call_importance(call)
+        # Collect IDs all "enabled" speakers:
+        speakers = self.parse_speakers(call.data.get("speaker", None), True)
+        return [speaker.id for speaker in speakers if importance >= speaker.filter]
+
+    # endregion
+
+    # region handle_play
+    async def handle_play(self, call):
+        """Handle "play" service call"""
+        if not self.online:
+            return
+        sound = str(call.data.get("sound", ""))
+        importance = self.get_call_importance(call)
+        speakers = self.get_call_speakers(call)
+
+        if not bool(sound):
+            self.logError("lvt.play: <sound> parameter is empty")
+            exit
+        if not bool(speakers):
+            self.logInfo("lvt.play: no sutable speakers found")
+            return
+
+        self.synchronize_speakers()
+
+        data = {"Sound": sound, "Importance": importance, "Terminals": speakers}
+        self.send_message(MSG_API_PLAY, data=data)
+
+    # endregion
+
     # region handle_say
     async def handle_say(self, call):
         """Handle "say" service call."""
         if not self.online:
             return
-        text = call.data.get("text", "")
-        if not text:
-            return
-        self.synchronize_speakers()
-        importance = int(list(call.data.get("importance", "0:").partition(":"))[0])
+        text = call.data.get("say", "")
+        importance = self.get_call_importance(call)
+        speakers = self.get_call_speakers(call)
 
-        # Collect IDs all "enabled" speakers:
-        device_id = call.data.get("speaker", None)
-        ids = []
-        for _, speaker in self.speakers.items():
-            if speaker.online and importance >= speaker.filter and speaker.volume > 0:
-                if device_id is None:
-                    ids.append(speaker.id)
-                if speaker.device is not None and (speaker.device.id == device_id):
-                    ids.append(speaker.id)
-        if len(ids) > 0:
-            data = {"Text": text, "Importance": importance, "Terminals": ids}
-            self.send_message(MSG_API_SAY, data=data)
+        if not bool(text):
+            self.logError("lvt.say: <say> parameter is empty")
+            return
+
+        if not bool(speakers):
+            self.logInfo("lvt.say: no sutable speakers found")
+            return
+
+        self.synchronize_speakers()
+
+        data = {"Say": text, "Importance": importance, "Terminals": speakers}
+        self.send_message(MSG_API_SAY, data=data)
+
+    # endregion
+
+    # region handle_confirm
+    async def handle_confirm(self, call):
+        """Handle "confirm" service call."""
+        if not self.online:
+            return
+        text = call.data.get("say", "")
+        importance = self.get_call_importance(call)
+        speakers = self.get_call_speakers(call)
+
+        if not bool(text) or not not bool(speakers):
+            return
+
+        self.synchronize_speakers()
+
+        data = {"Say": text, "Importance": importance, "Terminals": speakers}
+
+        self.send_message(MSG_API_CONFIRM, data=data)
+
+    # endregion
+
+    # region handle_negotiate
+    async def handle_negotiate(self, call):
+        """Handle "say" service call."""
+        if not self.online:
+            return
+        text = call.data.get("say", "")
+        importance = self.get_call_importance(call)
+        speakers = self.get_call_speakers(call)
+
+        if not text or not speakers:
+            return
+
+        self.synchronize_speakers()
+
+        data = {"Say": text, "Importance": importance, "Terminals": speakers}
+        self.send_message(MSG_API_NEGOTIATE, data=data)
 
     # endregion
 
@@ -405,6 +566,7 @@ class LvtApi:
     # endregion
 
 
+# region async_server_test()
 async def async_server_test(
     hass: HomeAssistantType, server: str, port: int, password: str
 ) -> bool:
@@ -431,3 +593,6 @@ async def async_server_test(
         _ok = False
 
     return _ok
+
+
+# endregion

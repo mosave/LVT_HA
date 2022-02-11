@@ -17,7 +17,7 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 
 # from homeassistant.exceptions import HomeAssistantError
-from .const import DOMAIN, DEFAULT_SERVER, DEFAULT_PORT, CONFIG_TYPE_ENTRY
+from .const import DOMAIN, DEFAULT_SERVER, DEFAULT_PORT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,8 +123,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 )
             errors["base"] = "cannot_connect"
             schema = data_schema(user_input=user_input)
-        elif lvtApi.config_type != CONFIG_TYPE_ENTRY:
-            schema = vol.Schema({vol.Optional("not_in_use", default=""): str})
+        # elif lvtApi.config_type != CONFIG_TYPE_ENTRY:
+        #     schema = vol.Schema({vol.Optional("not_in_use", default=""): str})
         else:
             schema = data_schema(lvtApi=lvtApi)
 

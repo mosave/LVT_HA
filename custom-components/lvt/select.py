@@ -6,7 +6,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import (
     DOMAIN,
     IMPORTANCE_TITLE,
-    LVT_PLATFORMS,
 )
 from .lvt_entity import LvtEntity
 
@@ -14,21 +13,21 @@ LVT_SELECT_ADD_ENTITIES: AddEntitiesCallback = None
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the Demo config entry."""
+    """Set up the LVT Speaker "select" config entry."""
     await async_setup_platform(hass, config_entry, async_add_entities)
 
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    """Set up the LVT Speaker "number" platform."""
+    """Set up the LVT Speaker "select" platform."""
     global LVT_SELECT_ADD_ENTITIES
     LVT_SELECT_ADD_ENTITIES = async_add_entities
     lvt_api = hass.data[DOMAIN]
-    for _, speaker in lvt_api.speakers.items():
-        speaker.entities["filter"] = LvtFilterEntity(hass, speaker)
 
-    lvt_api.loaded_platforms.add("select")
-    if set(lvt_api.loaded_platforms) == set(LVT_PLATFORMS):
-        lvt_api.start()
+    for _, speaker in lvt_api.speakers.items():
+        if "filter" not in speaker.entities:
+            speaker.entities["filter"] = LvtFilterEntity(hass, speaker)
+
+    lvt_api.platform_loaded("select")
 
 
 class LvtFilterEntity(SelectEntity, LvtEntity):
