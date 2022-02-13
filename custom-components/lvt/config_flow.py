@@ -7,7 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.components.lvt.lvt import (
+from .lvt import (
     LvtApi,
     async_server_test,
 )
@@ -17,7 +17,8 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 
 # from homeassistant.exceptions import HomeAssistantError
-from .const import DOMAIN, DEFAULT_SERVER, DEFAULT_PORT
+from .const import DOMAIN, DEFAULT_SERVER, DEFAULT_PORT, SSL_MODES, ssl_mode_to_int
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,14 +28,17 @@ def data_schema(lvtApi: LvtApi = None, user_input=None) -> str:
         _server = lvtApi.server
         _port = lvtApi.port
         _password = lvtApi.password
+        _ssl = SSL_MODES[lvtApi.ssl_mode]
     elif user_input is not None:
         _server = user_input["server"]
         _port = user_input["port"]
         _password = user_input["password"] if "password" in user_input else None
+        _ssl = user_input["ssl"] if "ssl" in user_input else 0
     else:
         _server = DEFAULT_SERVER
         _port = DEFAULT_PORT
         _password = None
+        _ssl = SSL_MODES[0]
 
     return vol.Schema(
         {
@@ -50,6 +54,11 @@ def data_schema(lvtApi: LvtApi = None, user_input=None) -> str:
                 "password",
                 description={"suggested_value": _password},
             ): str,
+            vol.Required(
+                "ssl",
+                description={"suggested_value": _ssl},
+                default=0,
+            ): vol.In(SSL_MODES),
         }
     )
 
@@ -60,6 +69,7 @@ async def async_test(hass, user_input) -> bool:
         user_input["server"],
         user_input["port"],
         user_input["password"] if "password" in user_input else None,
+        ssl_mode_to_int(user_input["ssl"] if "ssl" in user_input else 0),
     )
 
 

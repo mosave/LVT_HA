@@ -5,7 +5,7 @@ from .lvt import LvtApi
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.discovery import async_load_platform
-from .const import DOMAIN, LVT_PLATFORMS
+from .const import DOMAIN, LVT_PLATFORMS, ssl_mode_to_int
 
 
 async def async_initialize(hass: HomeAssistant, config) -> bool:
@@ -23,6 +23,7 @@ async def async_initialize(hass: HomeAssistant, config) -> bool:
             config["server"],
             config["port"] if "port" in config else None,
             config["password"],
+            ssl_mode_to_int(config["ssl"] if "ssl" in config else 0),
         )
 
     return True

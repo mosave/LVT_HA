@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import random
+import ssl
 import time
 
 import aiohttp
@@ -14,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .const import DOMAIN, LVT_PLATFORMS
 from .lvt_speaker import LvtSpeaker
 
-# region Constants
+# region Constants ##############################################################
 # API Server Authorization
 MSG_API_AUTHORIZE = "Authorize"
 
@@ -44,11 +45,30 @@ MSG_API_NEGOTIATE = "Negotiate"
 
 _LOGGER = logging.getLogger(__name__)
 
+# region get_protocol / get_ssl_context #########################################
+def get_protocol(ssl_mode: int) -> str:
+    return "https" if ssl_mode > 0 else "http"
+
+
+def get_ssl_context(ssl_mode: int):
+    if ssl_mode == 2:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    elif ssl_mode == 1:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    else:
+        context = None
+    return context
+
+
+# endregion
+
 
 class LvtApi:
     """LVT API class."""
 
-    # region __init__ / __del__
+    # region __init__ / __del__ #################################################
     def __init__(
         self,
         hass: HomeAssistantType,
@@ -56,12 +76,13 @@ class LvtApi:
         """Constructor"""
         self._api_id = str(random.randrange(100, 999))
         self.hass: HomeAssistantType = hass
-        self.session = async_get_clientsession(hass, verify_ssl=False)
+        self.session = async_get_clientsession(hass)
         self.__entities = {}
         self.__speakers = {}
         self.__server = None
         self.__port = None
         self.__password = None
+        self.__ssl_mode = 0
         self.__online = False
         self.__client_task = None
         self.__ws = None
@@ -76,8 +97,6 @@ class LvtApi:
 
         self.start()
 
-        # self.configure(server, port, password)
-
     def __del__(self):
         """Destructor (just in case)"""
         self.stop()
@@ -87,18 +106,23 @@ class LvtApi:
         self.hass.services.async_remove(DOMAIN, "negotiate")
 
     def configure_connection(
-        self,
-        server: str,
-        port: int,
-        password: str,
+        self, server: str, port: int, password: str, _ssl_mode: int
     ) -> None:
         """Set LvtApi options"""
         self.stop()
         self.__online = False
         self.__authorized = False
         self.__server = server if server is not None else "127.0.0.1"
-        self.__port = port if port is not None else 7999
+        self.__port = port if port is not None else 2700
         self.__password = password if password is not None else ""
+        self.__ssl_mode = (
+            int(_ssl_mode)
+            if _ssl_mode is not None
+            and isinstance(_ssl_mode, int)
+            and _ssl_mode >= 0
+            and _ssl_mode <= 2
+            else 0
+        )
         self.__loaded_platforms = set()
         self.create_registered_speakers()
         self.start()
@@ -113,7 +137,7 @@ class LvtApi:
 
     # endregion
 
-    # region properties
+    # region properties #########################################################
     @property
     def server(self) -> str:
         """LVT Server address or host"""
@@ -128,6 +152,11 @@ class LvtApi:
     def password(self) -> str:
         """LVT Server connection password"""
         return self.__password
+
+    @property
+    def ssl_mode(self) -> int:
+        """LVT Server SSL status"""
+        return int(self.__ssl_mode)
 
     @property
     def entities(self) -> dict[str, any]:
@@ -237,10 +266,13 @@ class LvtApi:
         while True:
             self.online = False
             try:
-                url = f"http://{self.server}:{self.port}"
+
+                url = f"{get_protocol(self.ssl_mode)}://{self.server}:{self.port}/api"
                 self.logDebug("Connecting %s", url)
                 self.__speakers_synced = time.time()
-                async with self.session.ws_connect(url) as ws:
+                async with self.session.ws_connect(
+                    url, heartbeat=10, ssl=get_ssl_context(self.ssl_mode)
+                ) as ws:
                     self.__ws = ws
                     session_started = time.time()
                     self.online = True
@@ -339,7 +371,7 @@ class LvtApi:
 
     # endregion
 
-    # region speaker manipulation: update, delete, create etc
+    # region speaker manipulation: update, delete, create etc ###################
     async def _async_update_server_status(self, info: dict[str, any]):
         """Update server entities with LVT server data"""
         try:
@@ -402,7 +434,7 @@ class LvtApi:
 
     # endregion
 
-    # region parse_speakers
+    # region parse_speakers #####################################################
     def parse_speakers(self, speakers, active_only=True):
         """Resolve (list of) speaker IDs. Accepted values are:
         - speaker id
@@ -445,7 +477,7 @@ class LvtApi:
 
     # endregion
 
-    # region get_call_XXXX()
+    # region get_call_XXXX() ####################################################
     def get_call_importance(self, call):
         """Retrieve call importance from LVT service call"""
         i = int(list(str(str(call.data.get("importance", 0)) + ":").partition(":"))[0])
@@ -460,7 +492,7 @@ class LvtApi:
 
     # endregion
 
-    # region handle_play
+    # region handle_play ########################################################
     async def handle_play(self, call):
         """Handle "play" service call"""
         if not self.online:
@@ -483,7 +515,7 @@ class LvtApi:
 
     # endregion
 
-    # region handle_say
+    # region handle_say #########################################################
     async def handle_say(self, call):
         """Handle "say" service call."""
         if not self.online:
@@ -507,7 +539,7 @@ class LvtApi:
 
     # endregion
 
-    # region handle_confirm
+    # region handle_confirm #####################################################
     async def handle_confirm(self, call):
         """Handle "confirm" service call."""
         if not self.online:
@@ -527,7 +559,7 @@ class LvtApi:
 
     # endregion
 
-    # region handle_negotiate
+    # region handle_negotiate ###################################################
     async def handle_negotiate(self, call):
         """Handle "say" service call."""
         if not self.online:
@@ -546,7 +578,7 @@ class LvtApi:
 
     # endregion
 
-    # region logInfo / logDebug / logWarning / logError
+    # region logInfo / logDebug / logWarning / logError #########################
     def logInfo(self, msg: str, *args, **kwargs):
         s = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
         _LOGGER.info(s, *args, **kwargs)
@@ -566,16 +598,20 @@ class LvtApi:
     # endregion
 
 
-# region async_server_test()
+# region async_server_test() ####################################################
 async def async_server_test(
-    hass: HomeAssistantType, server: str, port: int, password: str
+    hass: HomeAssistantType, server: str, port: int, password: str, ssl_mode: int
 ) -> bool:
     """Test if we can LVT API Server is available"""
     _ok = False
 
     try:
-        session = async_get_clientsession(hass, verify_ssl=False)
-        async with session.ws_connect(f"http://{server}:{port}") as ws:
+        session = async_get_clientsession(hass)
+
+        async with session.ws_connect(
+            f"{get_protocol(ssl_mode)}://{server}:{port}/api",
+            ssl=get_ssl_context(ssl_mode),
+        ) as ws:
             if password is not None:
                 request = {}
                 request["Message"] = MSG_API_AUTHORIZE
@@ -590,7 +626,7 @@ async def async_server_test(
                 _ok = True
             await ws.close()
     except:
-        _ok = False
+        pass
 
     return _ok
 
