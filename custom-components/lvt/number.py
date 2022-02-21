@@ -1,5 +1,4 @@
-# from __future__ import annotations
-
+from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 

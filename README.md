@@ -59,7 +59,7 @@ Home Assistant integration for Lite Voice Terminal
     * speaker_id, ID LVT терминала
     * device_id, ID соответствующего устройства Home Assistant
     * entity_id либо unique_id любого компонента терминала (volume, filter, online).
-    * area_id помещения, в котором установлены терминалы
+    * area_id: ID локации, в которой установлены терминалы
   * **<importance>**: Уровень важности сообщения. Текст будет проговорен только на терминалах с соответствующим уровенем фильтрации
     * 0: Неважная болтовня (текущее время, здрасте-доствидания и тд)
     * 1: Информационное сообщение (пора заменить батарейки в датчике)
@@ -95,22 +95,26 @@ lvt.negotiate
     say: <text>                             # Текст, проговариваемый при начале диалога
     prompt: <text>                          # Текст, проговариваемый если от пользователь игнорирует вопрос
                                             # Описание первого из возможноых вариантов выбора
-    option-1-intent: <intent_id>            # Интент, вызываемый при выборе первого варианта
-    option-1-utterance: <utterance>         # Ключевые фразы для выбора первого варианта
-    option-2-say: <text>                    # Сообщения, подтверждающие выбор первого варианта
+    option_1_intent: <intent_id>            # Интент, вызываемый при выборе первого варианта
+    option_1_utterance: <utterance>         # Ключевые фразы для выбора первого варианта
+    option_1_say: <text>                    # Сообщения, подтверждающие выбор первого варианта
+    option_1_data: <data>                   # Дополнительные данные при выборе первого варианта
                                             # Описание второго варианта выбора (см. выше)
-    option-2-intent: <intent_id>
-    option-2-utterance: <utterance>
-    option-2-say: <text>
+    option_2_intent: <intent_id>
+    option_2_utterance: <utterance>
+    option_2_say: <text>
+    option_2_data: <data>
         .....
                                             # Описание последнего варианта выбора (см. выше)
-    option-N-intent: <intent_id>
-    option-N-utterance: <utterance>
-    option-N-say: <text>
+    option_N_intent: <intent_id>
+    option_N_utterance: <utterance>
+    option_N_say: <text>
+    option_N_data: <data>
 
-    default-intent: <intent_id>             # Интент, вызываемый при отказе пользователя сделать выбор
-    default-timeout: <seconds>              # Время (в секундах), в течение которого пользователю необходимо дать ответ
-    default-say: <text>                     # Сообщение, подтверждающее отказ от выбора
+    default_intent: <intent_id>             # Интент, вызываемый при истечении времени ожидания
+    default_timeout: <seconds>              # Время (в секундах), в течение которого пользователю необходимо дать ответ
+    default_say: <text>                     # Сообщение, подтверждающее отказ от выбора
+    default_data: <data>                    # Дополнительные данные при истечении времени ожидания
 ```
 
 **Подтверждение согласия**
@@ -123,11 +127,14 @@ lvt.confirm
     prompt: <text>                          # Текст, проговариваемый если от пользователь игнорирует вопрос
     yes_intent: <intent_id>                 # Интент, вызываемый при выражении согласия
     yes_say: <text>                         # Сообщения, подтверждающие выбор первого варианта
+    yes_data: <text>                        # Дополнительные данные
     no_intent: <intent_id>                  # Интент, вызываемый при отказе
     no_say: <text>                          # Сообщение, подтверждающее отказ
+    no_data: <text>                         # Дополнительные данные
     default_intent: <intent_id>             # Интент, вызываемый при отказе пользователя сделать выбор
     default_timeout: <seconds>              # Время (в секундах), в течение которого пользователю необходимо дать ответ
     default_say: <text>                     # Сообщение, подтверждающее отказ от выбора
+    default_data: <data>                    # Дополнительные данные при истечении времени ожидания
 ```
 
 
@@ -162,12 +169,23 @@ lvt
 
 ```
 lvt
-    intent:
-        name: <intent_id>
-        heard: <список фраз>
+    intents:
+      - id: <intent_id>
         speaker: <speaker_id>
+        utterance: <utterance>
+        data: <data>
+```
 
 ```
+lvt
+    intent:
+      id: <intent_id>
+      speaker: <speaker_id>
+      utterance: <utterance>
+      data: <data>
+```
+
+
 
 
 ## Язык описания ключевых фраз (utterance)

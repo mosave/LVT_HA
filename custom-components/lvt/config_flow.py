@@ -23,12 +23,12 @@ from .const import DOMAIN, DEFAULT_SERVER, DEFAULT_PORT, SSL_MODES, ssl_mode_to_
 _LOGGER = logging.getLogger(__name__)
 
 
-def data_schema(lvtApi: LvtApi = None, user_input=None) -> str:
-    if lvtApi is not None:
-        _server = lvtApi.server
-        _port = lvtApi.port
-        _password = lvtApi.password
-        _ssl = SSL_MODES[lvtApi.ssl_mode]
+def data_schema(lvt_api: LvtApi = None, user_input=None) -> str:
+    if lvt_api is not None:
+        _server = lvt_api.server
+        _port = lvt_api.port
+        _password = lvt_api.password
+        _ssl = SSL_MODES[lvt_api.ssl_mode]
     elif user_input is not None:
         _server = user_input["server"]
         _port = user_input["port"]
@@ -116,12 +116,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        """async_step_init"""
         return await self.async_step_user(user_input)
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
-        lvtApi: LvtApi = self.hass.data.get(DOMAIN)
-        if lvtApi is None:
+        lvt_api: LvtApi = self.hass.data.get(DOMAIN)
+        if lvt_api is None:
             return self.async_abort(reason="not_setup")
 
         errors = {}
@@ -136,7 +137,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # elif lvtApi.config_type != CONFIG_TYPE_ENTRY:
         #     schema = vol.Schema({vol.Optional("not_in_use", default=""): str})
         else:
-            schema = data_schema(lvtApi=lvtApi)
+            schema = data_schema(lvt_api=lvt_api)
 
         return self.async_show_form(
             step_id="user",

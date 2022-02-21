@@ -14,6 +14,8 @@ async def async_initialize(hass: HomeAssistant, config) -> bool:
 
     lvt: LvtApi = hass.data[DOMAIN]
 
+    lvt.parse_intents(config)
+
     # if lvt intents are in config:
     #     lvt.configure_intents
     #
@@ -25,7 +27,6 @@ async def async_initialize(hass: HomeAssistant, config) -> bool:
             config["password"],
             ssl_mode_to_int(config["ssl"] if "ssl" in config else 0),
         )
-
     return True
 
 

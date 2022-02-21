@@ -7,41 +7,16 @@ import logging
 import random
 import ssl
 import time
+from typing import OrderedDict
 
 import aiohttp
+from homeassistant.core import HassJob
 
 from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from .const import DOMAIN, LVT_PLATFORMS
+from homeassistant.helpers import intent
+from .const import *
 from .lvt_speaker import LvtSpeaker
-
-# region Constants ##############################################################
-# API Server Authorization
-MSG_API_AUTHORIZE = "Authorize"
-
-# Query for LVT server status or server status update
-MSG_API_SERVER_STATUS = "ServerStatus"
-
-# Terminals status update:
-MSG_API_SPEAKER_STATUS = "Status"
-
-# Установить громкость
-MSG_API_VOLUME = "Volume"
-
-# Проиграть звуковой эффект
-MSG_API_PLAY = "Play"
-
-# Проговорить текст
-MSG_API_SAY = "Say"
-
-# Запустить диалог подтверждения
-MSG_API_CONFIRM = "Confirm"
-
-# Запустить диалог выбора варианта из списка возможных
-MSG_API_NEGOTIATE = "Negotiate"
-
-
-# endregion
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,11 +59,13 @@ class LvtApi:
         self.__password = None
         self.__ssl_mode = 0
         self.__online = False
+        self.__triggers = []
         self.__client_task = None
         self.__ws = None
         self.__queue = []
         self.__speakers_synced = time.time()
         self.__wstask_id = str(random.randrange(100, 999))
+        self.__intents = []
         hass.services.async_register(DOMAIN, "play", self.handle_play)
         hass.services.async_register(DOMAIN, "say", self.handle_say)
         hass.services.async_register(DOMAIN, "confirm", self.handle_confirm)
@@ -135,6 +112,11 @@ class LvtApi:
     def platform_loaded(self, platform):
         self.__loaded_platforms.add(platform)
 
+    def add_trigger(self, config, action, automation):
+        self.__triggers.append(
+            {"config": config, "action": action, "automation": automation}
+        )
+
     # endregion
 
     # region properties #########################################################
@@ -167,6 +149,10 @@ class LvtApi:
     def speakers(self) -> dict:
         """Accessor"""
         return self.__speakers
+
+    @property
+    def intents(self) -> dict:
+        return self.__intents
 
     @property
     def online(self) -> bool:
@@ -242,6 +228,9 @@ class LvtApi:
         if data:
             self.send_message(MSG_API_SPEAKER_STATUS, data=data)
 
+    def send_intents(self):
+        self.send_message(MSG_API_SET_INTENTS, data=self.intents)
+
     async def __websock_client(self):
         self.logDebug(
             "Waiting for configuration and loading platforms: %s", LVT_PLATFORMS
@@ -266,7 +255,6 @@ class LvtApi:
         while True:
             self.online = False
             try:
-
                 url = f"{get_protocol(self.ssl_mode)}://{self.server}:{self.port}/api"
                 self.logDebug("Connecting %s", url)
                 self.__speakers_synced = time.time()
@@ -295,7 +283,7 @@ class LvtApi:
 
                         msg = None  # команда
                         status_code = 0  # 0 if Ok
-                        # status = None  # сообщение об ошибке (опционально)
+                        status = None  # сообщение об ошибке (опционально)
                         data = None  # Данные, зависит от msg
                         try:
                             msg = await ws.receive(0.5)
@@ -335,6 +323,7 @@ class LvtApi:
                             if status_code == 0:
                                 self.logDebug("Authorized")
                                 self.__authorized = True
+                                self.send_intents()
                             else:
                                 self.logError(
                                     "Authnentication failure: Invalid password."
@@ -356,6 +345,79 @@ class LvtApi:
                         elif msg == MSG_API_SPEAKER_STATUS:  # Speaker status update
                             for _, speaker in data.items():
                                 await self._async_update_speaker_status(speaker)
+
+                        elif msg == MSG_API_FIRE_INTENT:
+                            if "Intent" not in data:
+                                self.logError(
+                                    "LVT API.FireIntent: Intent not specified "
+                                )
+                            # region Fire An Intent
+                            intent_type = data["Intent"]
+                            slots = data["Data"] if "Data" in data else {}
+                            slots = {
+                                key: {"value": value} for key, value in slots.items()
+                            }
+                            try:
+                                response = await intent.async_handle(
+                                    self.hass, DOMAIN, intent_type, slots
+                                )
+                                self.logInfo(str(response))
+
+                            except intent.UnknownIntent as err:
+                                self.logWarning(
+                                    "Received unknown intent %s", intent_type
+                                )
+
+                            except intent.InvalidSlotInfo as err:
+                                self.logError(
+                                    "Received invalid slot data for intent %s: %s",
+                                    intent_type,
+                                    err,
+                                )
+
+                            except intent.IntentError as e:
+                                self.logError(
+                                    "Handling request for %s: %s %s",
+                                    intent_type,
+                                    type(e).__name__,
+                                    e,
+                                )
+                            # endregion
+
+                            # region Trigger Event
+                            for trigger in self.__triggers:
+                                if (
+                                    str(trigger["config"]["intent"]).lower()
+                                    == str(intent_type).lower()
+                                ):
+                                    job = HassJob(trigger["action"])
+                                    trigger_data = trigger["automation"]["trigger_data"]
+                                    speaker = (
+                                        data["Data"]["Speaker"]
+                                        if "Data" in data and "Speaker" in data["Data"]
+                                        else None
+                                    )
+
+                                    self.hass.async_run_hass_job(
+                                        job,
+                                        {
+                                            "trigger": {
+                                                **trigger_data,
+                                                "platform": DOMAIN,
+                                                "intent": intent_type,
+                                                "speaker": speaker,
+                                                "description": f'Intent "{intent_type}" from "{speaker}"',
+                                            }
+                                        },
+                                        None,
+                                    )
+                            # endregion
+                        elif msg == MSG_API_ERROR:
+                            self.logError(
+                                "LVT Server error #%s: %s",
+                                str(status_code),
+                                str(status),
+                            )
 
             except aiohttp.ClientConnectionError as e:
                 self.logWarning("Error connecting server: %s", str(e))
@@ -468,12 +530,98 @@ class LvtApi:
                 if speaker not in parsed_speakers:
                     if (
                         speaker.device is not None
-                        and (speaker.device.id == str(id1))
+                        and (
+                            speaker.device.id == str(id1)
+                            or speaker.device.area_id == id1
+                        )
                         or speaker.id == id1
                         or speaker.id == id2
                     ):
                         parsed_speakers.append(speaker)
         return parsed_speakers
+
+    # endregion
+
+    # region parse intents ######################################################
+    def __parse_intent(self, parent, icfg):
+        if not isinstance(icfg, dict):
+            self.logError("LFT config: %s: Invalid intent definition", parent)
+
+        for key in icfg:
+            if key not in ["intent", "speaker", "utterance", "data"]:
+                self.logError('LVT config: %s: Unknown property "%s" ', parent, key)
+                return None
+
+        if "intent" not in icfg:
+            self.logError('LVT config: %s: "intent:" property not defined ', parent)
+            return None
+
+        utterance = None
+
+        if "utterance" in icfg:
+            utterance = []
+            if isinstance(icfg["utterance"], str):
+                utterance.append(icfg["utterance"])
+
+            elif isinstance(icfg["utterance"], list):
+                for u in icfg["utterance"]:
+                    utterance.append(str(u))
+            if len(utterance) == 0:
+                self.logError(
+                    'LVT config: %s: "utterance" should be the (list of) phases',
+                    parent,
+                )
+                return None
+        else:
+            self.logError('LVT config: %s: "utterance" not defined', parent)
+            return None
+
+        if "speaker" in icfg:
+            speaker = self.parse_speakers(icfg["speaker"], active_only=False)
+        else:
+            speaker = None
+
+        if "data" in icfg:
+            if isinstance(icfg["data"], dict) or isinstance(icfg["data"], OrderedDict):
+                data = dict(icfg["data"])
+            else:
+                self.logError('LVT config: %s: "data" should be the dictionary', parent)
+                return None
+        else:
+            data = None
+
+        return {
+            "Intent": str(icfg["intent"]),
+            "Speaker": speaker,
+            "Utterance": utterance,
+            "Data": data,
+        }
+
+        return True
+
+    def parse_intents(self, config) -> bool:
+        if not isinstance(config, dict):
+            self.logError("Invalid configuration file passed")
+            return False
+        errors = 0
+        intents = []
+        for key, cfg in config.items():
+            if str(key).lower().startswith("intents"):
+                if isinstance(cfg, list):
+                    for i in range(len(cfg)):
+                        intnt = self.__parse_intent(f"lvt => {key}[{i}]", cfg[i])
+                        if intnt is not None:
+                            intents.append(intnt)
+                        else:
+                            errors += 1
+                else:
+                    self.logError(
+                        'LVT Config parser: Section "%s" should have list of intents',
+                        key,
+                    )
+        if bool(intents) or bool(errors):
+            self.__intents = intents
+        return True
 
     # endregion
 
@@ -503,7 +651,7 @@ class LvtApi:
 
         if not bool(sound):
             self.logError("lvt.play: <sound> parameter is empty")
-            exit
+            return
         if not bool(speakers):
             self.logInfo("lvt.play: no sutable speakers found")
             return
@@ -544,18 +692,61 @@ class LvtApi:
         """Handle "confirm" service call."""
         if not self.online:
             return
-        text = call.data.get("say", "")
+        say = call.data.get("say", None)
         importance = self.get_call_importance(call)
         speakers = self.get_call_speakers(call)
 
-        if not bool(text) or not not bool(speakers):
+        if not bool(speakers):
+            self.logInfo("lvt.confirm: no sutable speakers found")
             return
 
         self.synchronize_speakers()
 
-        data = {"Say": text, "Importance": importance, "Terminals": speakers}
+        options = []
+        options.append(
+            {
+                "Intent": call.data.get("no_intent", None),
+                "Say": call.data.get("no_say", None),
+                "Utterance": [
+                    "Нет",
+                    "Отмена",
+                    "Стой",
+                    "Отказ",
+                    "Не согласен",
+                    "Ни в коем случае",
+                ],
+                "Data": call.data.get("no_data", {}),
+            }
+        )
+        options.append(
+            {
+                "Intent": call.data.get("yes_intent", None),
+                "Say": call.data.get("yes_say", None),
+                "Utterance": [
+                    "Да",
+                    "Согласен",
+                    "Хорошо",
+                    "Конечно да",
+                    "Конечно",
+                    "Продолжай",
+                    "Безусловно",
+                ],
+                "Data": call.data.get("yes_data", {}),
+            }
+        )
 
-        self.send_message(MSG_API_CONFIRM, data=data)
+        data = {
+            "Say": say,
+            "Importance": importance,
+            "Terminals": speakers,
+            "Prompt": call.data.get("prompt", None),
+            "Options": options,
+            "DefaultSay": call.data.get("default_say", None),
+            "DefaultIntent": call.data.get("default_intent", None),
+            "DefaultTimeout": call.data.get("default_timeout", None),
+            "DefaultData": call.data.get("default_data", None),
+        }
+        self.send_message(MSG_API_NEGOTIATE, data=data)
 
     # endregion
 
@@ -564,16 +755,58 @@ class LvtApi:
         """Handle "say" service call."""
         if not self.online:
             return
-        text = call.data.get("say", "")
+        say = call.data.get("say", None)
         importance = self.get_call_importance(call)
         speakers = self.get_call_speakers(call)
 
-        if not text or not speakers:
+        if not bool(speakers):
+            self.logInfo("lvt.negotiate: no sutable speakers found")
             return
 
         self.synchronize_speakers()
 
-        data = {"Say": text, "Importance": importance, "Terminals": speakers}
+        index = []
+        options = []
+        for name, value in call.data.items():
+            n = str(name).split("_")
+            if n[0] == "option":
+                if len(n) == 3 and int(n[1]) > 0 and int(n[1]) < 11:
+                    if int(n[1]) not in index:
+                        index.append(int(n[1]))
+                else:
+                    self.logError("Invalid LVT negotiate option parameter: %s", name)
+        index.sort()
+        for o in index:
+            options.append({"Intent": None, "Utterance": None, "Say": None})
+        for name, value in call.data.items():
+            n = str(name).split("_")
+            if n[0] == "option":
+                if int(n[1]) in index:
+                    o = index.index(int(n[1]))
+                    if n[2] == "intent":
+                        options[o]["Intent"] = value
+                    elif n[2] == "utterance":
+                        options[o]["Utterance"] = value
+                    elif n[2] == "say":
+                        options[o]["Say"] = value
+                    elif n[2] == "data":
+                        options[o]["Data"] = value
+                    else:
+                        self.logError("Invalid LVT negotiate option: %s", name)
+                else:
+                    self.logError("Invalid LVT negotiate option parameter: %s", name)
+
+        data = {
+            "Say": say,
+            "Importance": importance,
+            "Terminals": speakers,
+            "Prompt": call.data.get("prompt", None),
+            "Options": options,
+            "DefaultSay": call.data.get("default_say", None),
+            "DefaultIntent": call.data.get("default_intent", None),
+            "DefaultTimeout": call.data.get("default_timeout", None),
+            "DefaultData": call.data.get("default_data", None),
+        }
         self.send_message(MSG_API_NEGOTIATE, data=data)
 
     # endregion
