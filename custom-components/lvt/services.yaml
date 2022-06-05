@@ -25,7 +25,7 @@ play:
             - "3: Critically important message"
     speaker:
       name: "[List of] speaker IDs"
-      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
       required: false
       selector:
         device:
@@ -57,7 +57,7 @@ say:
             - "3: Critically important message"
     speaker:
       name: List of speaker IDs
-      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
       required: false
       selector:
         device:
@@ -157,7 +157,7 @@ confirm:
 
     speaker:
       name: List of speaker IDs
-      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
       required: false
       selector:
         device:
@@ -191,7 +191,7 @@ negotiate:
             - "3: Critically important message"
     speaker:
       name: List of speaker IDs
-      description: Any of LVT speaker id, HA device id, unique id or device entity id are accepted
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
       required: false
       selector:
         device:
@@ -335,24 +335,42 @@ negotiate:
       selector:
         text:
 
+##################################################################################################
+restart_speaker:
+  name: Restart speaker
+  description: Restart speaker
+
+  fields:
+    speaker:
+      name: "[List of] speaker IDs"
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+    update:
+      name: Force LVT client software update
+      description: Update LVT client version and restart speaker
+      required: false
+      selector:
+        boolean:
+    say:
+      name: Text to say before restarting speaker
+      description: Say something before restarting speaker
+      required: false
+      selector:
+        text:
+    say_on_restart:
+      name: Text to say after reboot
+      description: Say something after speaker restarted
+      required: false
+      selector:
+        text:
+
+##################################################################################################
+reload:
+  name: Reload
+  description: Reload the YAML-based LVT configuration.
 
 
 
-
-# say_action:
-#   name: Say action
-#   description: Send a TTS message to Snips to listen for a response.
-#   fields:
-#     can_be_enqueued:
-#       name: Can be enqueued
-#       description: If True, session waits for an open session to end, if False session is dropped if one is running
-#       default: true
-#       selector:
-#         boolean:
-#     custom_data:
-#       name: Custom data
-#       description: custom data that will be included with all messages in this session
-#       example: user=UserName
-#       default: ''
-#       selector:
-#         text:

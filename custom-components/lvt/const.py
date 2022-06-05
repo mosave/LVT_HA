@@ -59,10 +59,15 @@ MSG_API_SAY: Final = "Say"
 
 # Запустить диалог выбора варианта из списка возможных
 MSG_API_NEGOTIATE: Final = "Negotiate"
+
+# Запустить диалог выбора варианта из списка возможных
+MSG_API_RESTART: Final = "Restart"
+
 # endregion
 
 
 def lvt_unique_id(speaker_id: str, e_id: str) -> str:
+    """Generate unique_id as lvt_<speaker_id>_<e_id>"""
     eid = DOMAIN + "_"
     if speaker_id is not None:
         eid += slugify(speaker_id) + "_"
@@ -71,10 +76,12 @@ def lvt_unique_id(speaker_id: str, e_id: str) -> str:
 
 
 def lvt_entity_id(speaker_id: str, e_id: str) -> str:
+    """Generate entity_id as lvt.lvt_<speaker_id>_<e_id>"""
     return DOMAIN + "." + lvt_unique_id(speaker_id, e_id)
 
 
 def ssl_mode_to_int(ssl_mode: str) -> int:
+    """Convert SSL_MODE to integer"""
     try:
         if str(ssl_mode) in SSL_MODES:
             mode = SSL_MODES.index(str(ssl_mode))
@@ -83,6 +90,6 @@ def ssl_mode_to_int(ssl_mode: str) -> int:
 
         if not isinstance(mode, int) or mode < 0 or mode > 2:
             mode = 0
-    except Exception:
+    except ValueError:
         mode = 0
     return mode

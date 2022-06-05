@@ -1,6 +1,9 @@
 """The Lite Voice Terminal integration"""
 from __future__ import annotations
-from .lvt import LvtApi
+from homeassistant.const import SERVICE_RELOAD
+
+from homeassistant.helpers import entity_component, service
+from .lvt import _LOGGER, LvtApi
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -13,12 +16,7 @@ async def async_initialize(hass: HomeAssistant, config) -> bool:
         hass.data[DOMAIN] = LvtApi(hass)
 
     lvt: LvtApi = hass.data[DOMAIN]
-
     lvt.parse_intents(config)
-
-    # if lvt intents are in config:
-    #     lvt.configure_intents
-    #
 
     if "server" in config and "password" in config:
         lvt.configure_connection(
@@ -27,6 +25,7 @@ async def async_initialize(hass: HomeAssistant, config) -> bool:
             config["password"],
             ssl_mode_to_int(config["ssl"] if "ssl" in config else 0),
         )
+
     return True
 
 
@@ -36,12 +35,28 @@ async def async_setup(hass: HomeAssistant, config) -> bool:
         return False
     if DOMAIN not in config:
         return True
+    component = entity_component.EntityComponent(_LOGGER, DOMAIN, hass)
+
+    async def reload_lvt_config_handler(service_call) -> None:
+        """Remove all zones and load new ones from config."""
+        conf = await component.async_prepare_reload(skip_reset=True)
+        if conf is None:
+            return
+        await async_initialize(hass, config[DOMAIN])
+
     _ok = await async_initialize(hass, config[DOMAIN])
     if _ok:
         for platform in LVT_PLATFORMS:
             hass.async_create_task(
                 async_load_platform(hass, platform, DOMAIN, {}, config[DOMAIN])
             )
+        service.async_register_admin_service(
+            hass,
+            DOMAIN,
+            SERVICE_RELOAD,
+            reload_lvt_config_handler,
+        )
+
     return _ok
 
 

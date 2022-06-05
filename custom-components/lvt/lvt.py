@@ -1,13 +1,10 @@
-"""Pandora Car Alarm System API."""
-
-# import asyncio
+"""LVT API"""
 import asyncio
 import json
 import logging
 import random
 import ssl
 import time
-from typing import OrderedDict
 
 import aiohttp
 from homeassistant.core import HassJob
@@ -15,17 +12,32 @@ from homeassistant.core import HassJob
 from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import intent
-from .const import *
+from .const import (
+    DOMAIN,
+    LVT_PLATFORMS,
+    MSG_API_AUTHORIZE,
+    MSG_API_ERROR,
+    MSG_API_FIRE_INTENT,
+    MSG_API_NEGOTIATE,
+    MSG_API_PLAY,
+    MSG_API_RESTART,
+    MSG_API_SAY,
+    MSG_API_SERVER_STATUS,
+    MSG_API_SET_INTENTS,
+    MSG_API_SPEAKER_STATUS,
+)
 from .lvt_speaker import LvtSpeaker
 
 _LOGGER = logging.getLogger(__name__)
 
 # region get_protocol / get_ssl_context #########################################
 def get_protocol(ssl_mode: int) -> str:
+    """HTTPS or HTTP"""
     return "https" if ssl_mode > 0 else "http"
 
 
 def get_ssl_context(ssl_mode: int):
+    """Create and initialize SSLContext if required"""
     if ssl_mode == 2:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     elif ssl_mode == 1:
@@ -51,7 +63,6 @@ class LvtApi:
         """Constructor"""
         self._api_id = str(random.randrange(100, 999))
         self.hass: HomeAssistantType = hass
-        self.session = async_get_clientsession(hass)
         self.__entities = {}
         self.__speakers = {}
         self.__server = None
@@ -70,9 +81,8 @@ class LvtApi:
         hass.services.async_register(DOMAIN, "say", self.handle_say)
         hass.services.async_register(DOMAIN, "confirm", self.handle_confirm)
         hass.services.async_register(DOMAIN, "negotiate", self.handle_negotiate)
+        hass.services.async_register(DOMAIN, "restart_speaker", self.handle_restart)
         self.__loaded_platforms = set()
-
-        self.start()
 
     def __del__(self):
         """Destructor (just in case)"""
@@ -81,6 +91,7 @@ class LvtApi:
         self.hass.services.async_remove(DOMAIN, "say")
         self.hass.services.async_remove(DOMAIN, "confirm")
         self.hass.services.async_remove(DOMAIN, "negotiate")
+        self.hass.services.async_remove(DOMAIN, "restart_speaker")
 
     def configure_connection(
         self, server: str, port: int, password: str, _ssl_mode: int
@@ -105,14 +116,16 @@ class LvtApi:
         self.start()
 
     def configure_intents(self):
-        # process and check intents passed
+        """process and check intents passed"""
         if self.online:
             pass
 
     def platform_loaded(self, platform):
+        """Register platform as loaded"""
         self.__loaded_platforms.add(platform)
 
     def add_trigger(self, config, action, automation):
+        """Register trigger to track"""
         self.__triggers.append(
             {"config": config, "action": action, "automation": automation}
         )
@@ -152,21 +165,29 @@ class LvtApi:
 
     @property
     def intents(self) -> dict:
+        """self.ntents"""
         return self.__intents
 
     @property
+    def started(self) -> bool:
+        """If WS client started"""
+        return self.__client_task is not None
+
+    @property
     def online(self) -> bool:
+        """Online status"""
         return self.__online
 
     @property
     def platforms_loaded(self) -> bool:
-        return set(self.__loaded_platforms) != set(LVT_PLATFORMS)
+        """If all platforms loaded"""
+        return set(self.__loaded_platforms) == set(LVT_PLATFORMS)
 
     @online.setter
     def online(self, is_online: bool):
         """Update .online property and "lvt.online" entity"""
         if is_online != self.__online:
-            self.logDebug(
+            self.log_debug(
                 "Connected to LVT server"
                 if is_online
                 else "Disconnected from LVT server"
@@ -183,24 +204,25 @@ class LvtApi:
 
     @property
     def authorized(self) -> bool:
+        """If WS client is connected and atuthorized on LVT server"""
         return self.__authorized
 
     # endregion
 
-    # region WebSock client implementation: start / stop / send_message / __websock_client
+    # region WebSock client implementation: start / stop / send_message #########
     def start(self):
         """Start LVT API Client task"""
-        if self.__client_task is None:
+        if not self.started:
             self.__wstask_id = str(random.randrange(100, 999))
-            self.logDebug("Starting websock client")
+            self.log_debug("Starting websock client")
 
             self.__online = False
-            self.__client_task = self.hass.async_create_task(self.__websock_client())
+            self.__client_task = asyncio.create_task(self.__websock_client())
 
     def stop(self):
         """Stop LVT API Client task"""
-        if self.__client_task is not None:
-            self.logDebug("Stopping websock client")
+        if self.started:
+            self.log_debug("Stopping websock client")
             self.__client_task.cancel()
             self.__client_task = None
 
@@ -211,15 +233,17 @@ class LvtApi:
         status: str = None,
         data=None,
     ):
+        """Queue message to LVT server"""
         message = {"Message": msg, "StatusCode": status_code}
-        if status != None:
+        if status is not None:
             message["Status"] = str(status)
-        if data != None:
+        if data is not None:
             message["Data"] = json.dumps(data)
 
         self.__queue.append(message)
 
     def synchronize_speakers(self):
+        """Send speaker state changes to LVT server"""
         self.__speakers_synced = time.time()
         data = {}
         for _, speaker in self.speakers.items():
@@ -229,49 +253,57 @@ class LvtApi:
             self.send_message(MSG_API_SPEAKER_STATUS, data=data)
 
     def send_intents(self):
+        """Send active intents configuration to LVT server"""
         self.send_message(MSG_API_SET_INTENTS, data=self.intents)
 
+    # endregion
+
+    # region __websock_client() #################################################
     async def __websock_client(self):
-        self.logDebug(
+        self.log_debug(
             "Waiting for configuration and loading platforms: %s", LVT_PLATFORMS
         )
         session_started = time.time()
         error_reported = False
-        while (
-            self.platforms_loaded
-            or not bool(self.__server)
-            or not bool(self.__port)
-            or not bool(self.__password)
-        ):
-            if ((time.time() - session_started) > 30) and not error_reported:
-                error_reported = True
-                if self.platforms_loaded:
-                    self.logError("Not all LVT platforms loaded!")
-                else:
-                    self.logError(
-                        "Missing Lite Voice Terminal connection config. Please consult LVT documentation"
-                    )
-            await asyncio.sleep(0.5)
         while True:
+            if (
+                not self.platforms_loaded
+                or not bool(self.__server)
+                or not bool(self.__port)
+                or not bool(self.__password)
+            ):
+                if ((time.time() - session_started) > 30) and not error_reported:
+                    error_reported = True
+                    if not self.platforms_loaded:
+                        self.log_error("Not all LVT platforms loaded!")
+                    else:
+                        self.log_error(
+                            "Missing Lite Voice Terminal connection config. Please consult LVT documentation"
+                        )
+                await asyncio.sleep(1)
+                continue
+            else:
+                error_reported = False
+
             self.online = False
             try:
                 url = f"{get_protocol(self.ssl_mode)}://{self.server}:{self.port}/api"
-                self.logDebug("Connecting %s", url)
+                self.log_debug("Connecting %s", url)
                 self.__speakers_synced = time.time()
-                async with self.session.ws_connect(
+                async with async_get_clientsession(self.hass).ws_connect(
                     url, heartbeat=10, ssl=get_ssl_context(self.ssl_mode)
                 ) as ws:
                     self.__ws = ws
                     session_started = time.time()
                     self.online = True
-                    if self.password != None:
+                    if self.password is not None:
                         self.send_message(MSG_API_AUTHORIZE, data=str(self.password))
                     while True:
                         # Check if not authorized within 5 seconds
                         if not self.authorized and (
                             (time.time() - session_started) > 5
                         ):
-                            self.logError("Not authorized!")
+                            self.log_error("Not authorized!")
                             await ws.close()
                             break
                         while len(self.__queue) > 0:
@@ -285,10 +317,12 @@ class LvtApi:
                         status_code = 0  # 0 if Ok
                         status = None  # сообщение об ошибке (опционально)
                         data = None  # Данные, зависит от msg
+
+                        # region ожидание сообщения ##########
                         try:
                             msg = await ws.receive(0.5)
                             if msg is None:
-                                pass
+                                continue
                             elif msg.type == aiohttp.WSMsgType.TEXT:
                                 # Разбираем пакет, тупо игнорируя ошибки
                                 try:
@@ -310,25 +344,27 @@ class LvtApi:
                                         else None
                                     )
                                 except Exception:
-                                    msg = None
+                                    continue
                             elif msg.type == aiohttp.WSMsgType.CLOSED:
-                                msg = None
                                 break
                             else:
-                                msg = None
+                                continue
                         except asyncio.TimeoutError:
-                            msg = None
+                            continue
+                        # endregion
+
                         # Process message received
                         if msg == MSG_API_AUTHORIZE:  # LVT Server status message
                             if status_code == 0:
-                                self.logDebug("Authorized")
+                                self.log_debug("Authorized")
                                 self.__authorized = True
                                 self.send_intents()
                             else:
-                                self.logError(
+                                self.log_error(
                                     "Authnentication failure: Invalid password."
                                 )
                                 await ws.close()
+
                         if msg == MSG_API_SERVER_STATUS:  # LVT Server status message
                             await self._async_update_server_status(data)
                             if "Terminals" in data:
@@ -348,35 +384,70 @@ class LvtApi:
 
                         elif msg == MSG_API_FIRE_INTENT:
                             if "Intent" not in data:
-                                self.logError(
+                                self.log_error(
                                     "LVT API.FireIntent: Intent not specified "
                                 )
-                            # region Fire An Intent
                             intent_type = data["Intent"]
-                            slots = data["Data"] if "Data" in data else {}
+                            intent_data = data["Data"] if "Data" in data else {}
+                            intent_importance = (
+                                data["Importance"] if "Importance" in data else 1
+                            )
+                            intent_speaker = (
+                                data["Terminal"] if "Terminal" in data else None
+                            )
+
+                            # region Fire An Intent
                             slots = {
-                                key: {"value": value} for key, value in slots.items()
+                                key: {"value": value}
+                                for key, value in intent_data.items()
                             }
                             try:
                                 response = await intent.async_handle(
                                     self.hass, DOMAIN, intent_type, slots
                                 )
-                                self.logInfo(str(response))
+                                self.log(str(response))
 
-                            except intent.UnknownIntent as err:
-                                self.logWarning(
+                                if "plain" in response.speech:
+                                    self.send_message(
+                                        MSG_API_SAY,
+                                        data={
+                                            "Say": response.speech["plain"]["speech"],
+                                            "Importance": intent_importance,
+                                            "Terminals": [intent_speaker],
+                                        },
+                                    )
+
+                            # for intent_speech, alexa_speech in SPEECH_MAPPINGS.items():
+                            #     if intent_speech in intent_response.speech:
+                            #         alexa_response.add_speech(
+                            #             alexa_speech, intent_response.speech[intent_speech]["speech"]
+                            #         )
+                            #     if intent_speech in intent_response.reprompt:
+                            #         alexa_response.add_reprompt(
+                            #             alexa_speech, intent_response.reprompt[intent_speech]["reprompt"]
+                            #         )
+
+                            # if "simple" in intent_response.card:
+                            #     alexa_response.add_card(
+                            #         CardType.simple,
+                            #         intent_response.card["simple"]["title"],
+                            #         intent_response.card["simple"]["content"],
+                            #     )
+
+                            except intent.UnknownIntent:
+                                self.log_warning(
                                     "Received unknown intent %s", intent_type
                                 )
 
                             except intent.InvalidSlotInfo as err:
-                                self.logError(
+                                self.log_error(
                                     "Received invalid slot data for intent %s: %s",
                                     intent_type,
                                     err,
                                 )
 
                             except intent.IntentError as e:
-                                self.logError(
+                                self.log_error(
                                     "Handling request for %s: %s %s",
                                     intent_type,
                                     type(e).__name__,
@@ -384,19 +455,40 @@ class LvtApi:
                                 )
                             # endregion
 
-                            # region Trigger Event
+                            # region Trigger Triggers
                             for trigger in self.__triggers:
+                                cfg = trigger["config"]
+                                t_intent = (
+                                    str(cfg["intent"]) if "intent" in cfg else None
+                                )
+                                should_fire = t_intent.lower() == intent_type.lower()
+
+                                if should_fire:
+                                    if "speaker" in cfg:
+                                        t_speakers = self.parse_speakers(
+                                            cfg["speaker"], active_only=False
+                                        )
+                                        t_speakers = [s.id for s in t_speakers]
+                                        if intent_speaker not in t_speakers:
+                                            should_fire = False
                                 if (
-                                    str(trigger["config"]["intent"]).lower()
-                                    == str(intent_type).lower()
+                                    should_fire
+                                    and "data" in cfg
+                                    and isinstance(cfg["data"], dict)
                                 ):
+                                    for key, value in cfg["data"].items():
+                                        if key not in intent_data:
+                                            should_fire = False
+                                            break
+                                        elif json.dumps(value) != json.dumps(
+                                            intent_data[key]
+                                        ):
+                                            should_fire = False
+                                            break
+
+                                if should_fire:
                                     job = HassJob(trigger["action"])
                                     trigger_data = trigger["automation"]["trigger_data"]
-                                    speaker = (
-                                        data["Data"]["Speaker"]
-                                        if "Data" in data and "Speaker" in data["Data"]
-                                        else None
-                                    )
 
                                     self.hass.async_run_hass_job(
                                         job,
@@ -405,28 +497,28 @@ class LvtApi:
                                                 **trigger_data,
                                                 "platform": DOMAIN,
                                                 "intent": intent_type,
-                                                "speaker": speaker,
-                                                "description": f'Intent "{intent_type}" from "{speaker}"',
+                                                "speaker": intent_speaker,
+                                                "description": f'Intent "{intent_type}" fired by "{intent_speaker}"',
                                             }
                                         },
                                         None,
                                     )
                             # endregion
                         elif msg == MSG_API_ERROR:
-                            self.logError(
+                            self.log_error(
                                 "LVT Server error #%s: %s",
                                 str(status_code),
                                 str(status),
                             )
 
             except aiohttp.ClientConnectionError as e:
-                self.logWarning("Error connecting server: %s", str(e))
+                self.log_warning("Error connecting server: %s", str(e))
                 await asyncio.sleep(5)
             except Exception as e:
-                self.logError("API error [%s]: %s", type(e).__name__, str(e))
+                self.log_error("API error [%s]: %s", type(e).__name__, str(e))
                 await asyncio.sleep(5)
             except:
-                self.logDebug("API client stopped")
+                self.log_debug("API client stopped")
                 break
             finally:
                 self.online = False
@@ -439,7 +531,7 @@ class LvtApi:
         try:
             pass
         except Exception as e:
-            self.logError(
+            self.log_error(
                 "Error [%s] updating LVT Server status %s ", type(e).__name__, str(e)
             )
 
@@ -465,7 +557,7 @@ class LvtApi:
 
             await speaker.async_update(info)
         except Exception as e:
-            self.logError(
+            self.log_error(
                 'Error [%s] "%s" updating speaker: %s ',
                 type(e).__name__,
                 str(e),
@@ -482,16 +574,21 @@ class LvtApi:
                     del self.speakers[speaker_id]
 
     def create_registered_speakers(self) -> list:
+        """Create entities for speakers registered earlier"""
         ids = []
         registry = self.hass.data["device_registry"]
         if registry is not None:
             for _, device in registry.devices.items():
-                domain, speaker_id = list(device.identifiers)[0]
-                if domain == DOMAIN and (speaker_id not in self.speakers):
-                    self.speakers[speaker_id] = LvtSpeaker(
-                        self.hass, speaker_id, self.online
-                    )
-
+                try:
+                    l = list(device.identifiers)[0];
+                    if( len(l)>1 ):
+                        domain, speaker_id = l
+                        if domain == DOMAIN and (speaker_id not in self.speakers):
+                            self.speakers[speaker_id] = LvtSpeaker(
+                                self.hass, speaker_id, self.online
+                            )
+                except Exception:
+                    pass
         return ids
 
     # endregion
@@ -514,8 +611,10 @@ class LvtApi:
 
         if isinstance(speakers, dict):
             speaker_ids = list(speakers.keys())
+        elif isinstance(speakers, list):
+            speaker_ids = [str(speaker) for speaker in speakers]
         else:
-            speaker_ids = list(speakers)
+            speaker_ids = [str(speakers)]
 
         parsed_speakers = []
 
@@ -545,15 +644,15 @@ class LvtApi:
     # region parse intents ######################################################
     def __parse_intent(self, parent, icfg):
         if not isinstance(icfg, dict):
-            self.logError("LFT config: %s: Invalid intent definition", parent)
+            self.log_error("LFT config: %s: Invalid intent definition", parent)
 
         for key in icfg:
             if key not in ["intent", "speaker", "utterance", "data"]:
-                self.logError('LVT config: %s: Unknown property "%s" ', parent, key)
+                self.log_error('LVT config: %s: Unknown property "%s" ', parent, key)
                 return None
 
         if "intent" not in icfg:
-            self.logError('LVT config: %s: "intent:" property not defined ', parent)
+            self.log_error('LVT config: %s: "intent:" property not defined ', parent)
             return None
 
         utterance = None
@@ -567,41 +666,42 @@ class LvtApi:
                 for u in icfg["utterance"]:
                     utterance.append(str(u))
             if len(utterance) == 0:
-                self.logError(
+                self.log_error(
                     'LVT config: %s: "utterance" should be the (list of) phases',
                     parent,
                 )
                 return None
         else:
-            self.logError('LVT config: %s: "utterance" not defined', parent)
+            self.log_error('LVT config: %s: "utterance" not defined', parent)
             return None
 
         if "speaker" in icfg:
-            speaker = self.parse_speakers(icfg["speaker"], active_only=False)
+            speakers = self.parse_speakers(icfg["speaker"], active_only=False)
         else:
-            speaker = None
+            speakers = []
 
         if "data" in icfg:
-            if isinstance(icfg["data"], dict) or isinstance(icfg["data"], OrderedDict):
+            if isinstance(icfg["data"], dict) or isinstance(icfg["data"], dict):
                 data = dict(icfg["data"])
             else:
-                self.logError('LVT config: %s: "data" should be the dictionary', parent)
+                self.log_error(
+                    'LVT config: %s: "data" should be the dictionary', parent
+                )
                 return None
         else:
             data = None
 
         return {
             "Intent": str(icfg["intent"]),
-            "Speaker": speaker,
+            "Terminals": speakers,
             "Utterance": utterance,
             "Data": data,
         }
 
-        return True
-
     def parse_intents(self, config) -> bool:
+        """Parse intent definition from YAML config"""
         if not isinstance(config, dict):
-            self.logError("Invalid configuration file passed")
+            self.log_error("Invalid configuration file passed")
             return False
         errors = 0
         intents = []
@@ -615,7 +715,7 @@ class LvtApi:
                         else:
                             errors += 1
                 else:
-                    self.logError(
+                    self.log_error(
                         'LVT Config parser: Section "%s" should have list of intents',
                         key,
                     )
@@ -650,10 +750,10 @@ class LvtApi:
         speakers = self.get_call_speakers(call)
 
         if not bool(sound):
-            self.logError("lvt.play: <sound> parameter is empty")
+            self.log_error("lvt.play: <sound> parameter is empty")
             return
         if not bool(speakers):
-            self.logInfo("lvt.play: no sutable speakers found")
+            self.log("lvt.play: no sutable speakers found")
             return
 
         self.synchronize_speakers()
@@ -673,11 +773,11 @@ class LvtApi:
         speakers = self.get_call_speakers(call)
 
         if not bool(text):
-            self.logError("lvt.say: <say> parameter is empty")
+            self.log_error("lvt.say: <say> parameter is empty")
             return
 
         if not bool(speakers):
-            self.logInfo("lvt.say: no sutable speakers found")
+            self.log("lvt.say: no sutable speakers found")
             return
 
         self.synchronize_speakers()
@@ -697,7 +797,7 @@ class LvtApi:
         speakers = self.get_call_speakers(call)
 
         if not bool(speakers):
-            self.logInfo("lvt.confirm: no sutable speakers found")
+            self.log("lvt.confirm: no sutable speakers found")
             return
 
         self.synchronize_speakers()
@@ -744,6 +844,7 @@ class LvtApi:
             "DefaultSay": call.data.get("default_say", None),
             "DefaultIntent": call.data.get("default_intent", None),
             "DefaultTimeout": call.data.get("default_timeout", None),
+            "DefaultUtterance": call.data.get("default_utterance", None),
             "DefaultData": call.data.get("default_data", None),
         }
         self.send_message(MSG_API_NEGOTIATE, data=data)
@@ -760,7 +861,7 @@ class LvtApi:
         speakers = self.get_call_speakers(call)
 
         if not bool(speakers):
-            self.logInfo("lvt.negotiate: no sutable speakers found")
+            self.log("lvt.negotiate: no sutable speakers found")
             return
 
         self.synchronize_speakers()
@@ -774,7 +875,7 @@ class LvtApi:
                     if int(n[1]) not in index:
                         index.append(int(n[1]))
                 else:
-                    self.logError("Invalid LVT negotiate option parameter: %s", name)
+                    self.log_error("Invalid LVT negotiate option parameter: %s", name)
         index.sort()
         for o in index:
             options.append({"Intent": None, "Utterance": None, "Say": None})
@@ -792,9 +893,9 @@ class LvtApi:
                     elif n[2] == "data":
                         options[o]["Data"] = value
                     else:
-                        self.logError("Invalid LVT negotiate option: %s", name)
+                        self.log_error("Invalid LVT negotiate option: %s", name)
                 else:
-                    self.logError("Invalid LVT negotiate option parameter: %s", name)
+                    self.log_error("Invalid LVT negotiate option parameter: %s", name)
 
         data = {
             "Say": say,
@@ -805,28 +906,62 @@ class LvtApi:
             "DefaultSay": call.data.get("default_say", None),
             "DefaultIntent": call.data.get("default_intent", None),
             "DefaultTimeout": call.data.get("default_timeout", None),
+            "DefaultUtterance": call.data.get("default_utterance", None),
             "DefaultData": call.data.get("default_data", None),
         }
         self.send_message(MSG_API_NEGOTIATE, data=data)
 
     # endregion
 
-    # region logInfo / logDebug / logWarning / logError #########################
-    def logInfo(self, msg: str, *args, **kwargs):
-        s = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
-        _LOGGER.info(s, *args, **kwargs)
+    # region handle_restart #####################################################
+    async def handle_restart(self, call):
+        """Handle "say" service call."""
+        if not self.online:
+            return
+        speakers = self.parse_speakers(
+            call.data.get("speaker", None), active_only=False
+        )
+        speakers = [speaker.id for speaker in speakers]
+        update = bool(call.data.get("update", False))
+        say = call.data.get("say", None)
+        say_on_connect = call.data.get("say_on_restart", None)
 
-    def logDebug(self, msg: str, *args, **kwargs):
-        s = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
-        _LOGGER.debug(s, *args, **kwargs)
+        if not bool(speakers):
+            self.log("lvt.restart: no sutable speakers found")
+            return
 
-    def logWarning(self, msg: str, *args, **kwargs):
-        s = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
-        _LOGGER.warning(s, *args, **kwargs)
+        self.send_message(
+            MSG_API_RESTART,
+            data={
+                "Terminals": speakers,
+                "Update": update,
+                "Say": say,
+                "SayOnConnect": say_on_connect,
+            },
+        )
 
-    def logError(self, msg: str, *args, **kwargs):
-        s = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
-        _LOGGER.error(s, *args, **kwargs)
+    # endregion
+
+    # region log / log_debug / log_warning / log_error #########################
+    def log(self, msg: str, *args, **kwargs):
+        """Log informational message"""
+        msg = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
+        _LOGGER.info(msg, *args, **kwargs)
+
+    def log_debug(self, msg: str, *args, **kwargs):
+        """Log debug message"""
+        msg = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
+        _LOGGER.debug(msg, *args, **kwargs)
+
+    def log_warning(self, msg: str, *args, **kwargs):
+        """Log warning message"""
+        msg = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
+        _LOGGER.warning(msg, *args, **kwargs)
+
+    def log_error(self, msg: str, *args, **kwargs):
+        """Log error message"""
+        msg = "{}@{} {}".format(self.__wstask_id, self._api_id, msg)
+        _LOGGER.error(msg, *args, **kwargs)
 
     # endregion
 

@@ -5,14 +5,35 @@ script:
       - service: lvt.confirm
         data:
           importance: '2: Important message'
-          text: 
-            - тесто
-            - Второй тест
-            - третий тест
-            - четвертый тест
+          say: 
+            - Вы уверены в том что хотите сделать что-то важное?
+            - Правда ли вы хотите это сделать?
+          prompt:
+            - подтвердите что вы это хотите сделать.
+            - Скажите Да или Нет
+          yes_intent: TestConfirmYesIntent
+          yes_say: "Подтверждение получено"
+
+          no_intent: TestConfirmNoIntent
+          no_say: "Вы отменили действие"
+
+          default_timeout: 40
+          default_intent: TestConfirmCancelIntent
+          default_say: "Время ожидания истекло"
+
           speaker: 
             - ea6296e6dbf37ab7c116e12ef222161e
-            - speaker2
+            - speaker2w
             - number.lvt_speaker4_volume]
 
 
+intent_script:
+  TestConfirmYesIntent:
+    speech: 
+      text: "Intent Действие подтверждено"
+  TestConfirmNoIntent:
+    speech: 
+      text: "Intent Действие отменено"
+  TestConfirmCancelIntent:
+    speech: 
+      text: "Intent Истекло время ожидания"

@@ -5,14 +5,80 @@ script:
       - service: lvt.negotiate
         data:
           importance: '2: Important message'
-          text: 
-            - тесто
-            - Второй тест
-            - третий тест
-            - четвертый тест
+          say: 
+            - Как вы считаете, что вкуснее - груши или яблоки?
+            - Скажите, а что вам больше нравится - груши или яблоки?
+            - Что выберете: груши или яблоки?
+            - Яблоки или груши? Вот в чём вопрос!
           speaker: 
             - ea6296e6dbf37ab7c116e12ef222161e
-            - speaker2
+            - speaker2w
             - number.lvt_speaker4_volume]
+          prompt:
+            - жду ответа
+            - так все-таки яблоки или груши?
 
 
+          option_1_intent: TestNegotiatePearIntent
+          option_1_utterance: 
+            - Груша
+          option_1_say: 
+            - Вы выбрали грушу.
+            - Груши стоят дороже яблок - но за удовольствие нужно платить
+            - Фи, груши
+            - Груши невкусные
+            - Висит груша - нельзя скушать!
+          option_1_data:
+            var1: val_1
+            var2: val_1
+
+          option_2_intent: TestNegotiateAppleIntent
+          option_2_utterance: 
+            - Яблоко
+            - яблочки
+          option_2_say:
+            - Вы выбрали яблоко
+            - Яблоки лежат на кухне
+            - Да, а ещё яблоки дешевле
+            - Я тоже люблю яблоки
+          option_2_data:
+            var1: val_2
+            var2: val_2
+
+          option_3_intent: TestNegotiateCancelIntent
+          option_3_utterance: 
+            - Отмена
+            - Отстань
+            - Не люблю фрукты
+            - Люблю мясо
+            - Не хочу
+
+          option_3_say:
+            - Не хотите как хотите
+            - Останетесь без фруктов
+            - Всё, молчу
+            - Отстал
+            - Ну и не очень-то хотелось.
+
+          default_intent: TestNegotiateCancelIntent
+          default_timeout: 60
+          default_say: 
+            - Время истекло. Останетесь без фруктов
+            - Поздно. Останетесь без запеканки
+            - Не успели! Будете сидеть без фруктов.
+            - Всё, фрукты кончились
+          default_data:
+            var1: val_default
+            var2: val_default
+
+
+intent_script:
+  TestNegotiatePearIntent:
+    speech: 
+      text: "Intent Выбрана груша"
+  TestNegotiateAppleIntent:
+    speech: 
+      text: "Intent выбрано яблоко"
+  TestNegotiateCancelIntent:
+    speech: 
+      text: "Intent истекло время ожидания"
