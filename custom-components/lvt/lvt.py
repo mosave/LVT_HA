@@ -164,8 +164,8 @@ class LvtApi:
         return self.__speakers
 
     @property
-    def intents(self) -> dict:
-        """self.ntents"""
+    def intents(self) -> list:
+        """self.intents"""
         return self.__intents
 
     @property
@@ -389,6 +389,8 @@ class LvtApi:
                                 )
                             intent_type = data["Intent"]
                             intent_data = data["Data"] if "Data" in data else {}
+                            intent_data["intent"] = intent_type
+
                             intent_importance = (
                                 data["Importance"] if "Importance" in data else 1
                             )
@@ -417,23 +419,6 @@ class LvtApi:
                                         },
                                     )
 
-                            # for intent_speech, alexa_speech in SPEECH_MAPPINGS.items():
-                            #     if intent_speech in intent_response.speech:
-                            #         alexa_response.add_speech(
-                            #             alexa_speech, intent_response.speech[intent_speech]["speech"]
-                            #         )
-                            #     if intent_speech in intent_response.reprompt:
-                            #         alexa_response.add_reprompt(
-                            #             alexa_speech, intent_response.reprompt[intent_speech]["reprompt"]
-                            #         )
-
-                            # if "simple" in intent_response.card:
-                            #     alexa_response.add_card(
-                            #         CardType.simple,
-                            #         intent_response.card["simple"]["title"],
-                            #         intent_response.card["simple"]["content"],
-                            #     )
-
                             except intent.UnknownIntent:
                                 self.log_warning(
                                     "Received unknown intent %s", intent_type
@@ -461,32 +446,7 @@ class LvtApi:
                                 t_intent = (
                                     str(cfg["intent"]) if "intent" in cfg else None
                                 )
-                                should_fire = t_intent.lower() == intent_type.lower()
-
-                                if should_fire:
-                                    if "speaker" in cfg:
-                                        t_speakers = self.parse_speakers(
-                                            cfg["speaker"], active_only=False
-                                        )
-                                        t_speakers = [s.id for s in t_speakers]
-                                        if intent_speaker not in t_speakers:
-                                            should_fire = False
-                                if (
-                                    should_fire
-                                    and "data" in cfg
-                                    and isinstance(cfg["data"], dict)
-                                ):
-                                    for key, value in cfg["data"].items():
-                                        if key not in intent_data:
-                                            should_fire = False
-                                            break
-                                        elif json.dumps(value) != json.dumps(
-                                            intent_data[key]
-                                        ):
-                                            should_fire = False
-                                            break
-
-                                if should_fire:
+                                if t_intent.lower() == intent_type.lower():
                                     job = HassJob(trigger["action"])
                                     trigger_data = trigger["automation"]["trigger_data"]
 
@@ -497,7 +457,7 @@ class LvtApi:
                                                 **trigger_data,
                                                 "platform": DOMAIN,
                                                 "intent": intent_type,
-                                                "speaker": intent_speaker,
+                                                "data": intent_data,
                                                 "description": f'Intent "{intent_type}" fired by "{intent_speaker}"',
                                             }
                                         },
@@ -580,8 +540,8 @@ class LvtApi:
         if registry is not None:
             for _, device in registry.devices.items():
                 try:
-                    l = list(device.identifiers)[0];
-                    if( len(l)>1 ):
+                    l = list(device.identifiers)[0]
+                    if len(l) > 1:
                         domain, speaker_id = l
                         if domain == DOMAIN and (speaker_id not in self.speakers):
                             self.speakers[speaker_id] = LvtSpeaker(
@@ -644,7 +604,7 @@ class LvtApi:
     # region parse intents ######################################################
     def __parse_intent(self, parent, icfg):
         if not isinstance(icfg, dict):
-            self.log_error("LFT config: %s: Invalid intent definition", parent)
+            self.log_error("LVT config: %s: Invalid intent definition", parent)
 
         for key in icfg:
             if key not in ["intent", "speaker", "utterance", "data"]:
@@ -676,7 +636,13 @@ class LvtApi:
             return None
 
         if "speaker" in icfg:
-            speakers = self.parse_speakers(icfg["speaker"], active_only=False)
+            speakers = icfg["speaker"]
+            if isinstance(speakers, dict):
+                speakers = [str(speaker).lower() for speaker in speakers.keys()]
+            elif isinstance(speakers, list):
+                speakers = [str(speaker).lower() for speaker in speakers]
+            else:
+                speakers = [str(speakers).lower()]
         else:
             speakers = []
 
@@ -704,14 +670,14 @@ class LvtApi:
             self.log_error("Invalid configuration file passed")
             return False
         errors = 0
-        intents = []
+        # intents = []
         for key, cfg in config.items():
             if str(key).lower().startswith("intents"):
                 if isinstance(cfg, list):
                     for i in range(len(cfg)):
                         intnt = self.__parse_intent(f"lvt => {key}[{i}]", cfg[i])
                         if intnt is not None:
-                            intents.append(intnt)
+                            self.__intents.append(intnt)
                         else:
                             errors += 1
                 else:
@@ -719,8 +685,6 @@ class LvtApi:
                         'LVT Config parser: Section "%s" should have list of intents',
                         key,
                     )
-        if bool(intents) or bool(errors):
-            self.__intents = intents
         return True
 
     # endregion
@@ -745,12 +709,12 @@ class LvtApi:
         """Handle "play" service call"""
         if not self.online:
             return
-        sound = str(call.data.get("sound", ""))
+        sound = str(call.data.get("play", ""))
         importance = self.get_call_importance(call)
         speakers = self.get_call_speakers(call)
 
         if not bool(sound):
-            self.log_error("lvt.play: <sound> parameter is empty")
+            self.log_error("lvt.play: <play> parameter is empty")
             return
         if not bool(speakers):
             self.log("lvt.play: no sutable speakers found")

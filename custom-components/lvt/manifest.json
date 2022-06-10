@@ -1,12 +1,10 @@
 {
   "domain": "lvt",
   "name": "Lite Voice Terminal",
+  "version": "0.1",
   "config_flow": true,
   "documentation": "https://www.home-assistant.io/integrations/lvt",
   "requirements": [],
-  "ssdp": [],
-  "zeroconf": [],
-  "homekit": {},
   "dependencies": [],
   "codeowners": [
     "@mosave"

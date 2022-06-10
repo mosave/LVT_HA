@@ -1,0 +1,34 @@
+lvt:
+  intents:
+    - intent: FirstCommandIntent
+      speaker: speaker2w
+      utterance: 
+        - первая команда
+      data: 
+        var1: "12345"
+
+    - intent: SecondCommandIntent
+      utterance:
+        - вторая команда
+      data:
+        var1: "12345"
+
+
+intent_script:
+  FirstCommandIntent:
+    speech: 
+      text: "Intent Первая команда, {{speaker}}, {{location}} "
+
+
+automation:
+  trigger:
+    - platform: lvt
+      intent: SecondCommandIntent
+
+  condition: "{{ trigger.data.speaker == 'speaker2w' }}"
+
+  action:
+    - service: persistent_notification.create
+      data:
+        message: "message speaker=|{{trigger.data.speaker}}|, location=|{{trigger.data.location}}|"
+        title: "LVT intent {{trigger.data.intent}} trigger"
