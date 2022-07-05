@@ -10,9 +10,9 @@ script:
             - второй вариант фразы
             - третий вариант фразы
             - четвертый вариант тестовой фразы
-          speaker: 
-            - ea6296e6dbf37ab7c116e12ef222161e
-            - speaker2w
-            - number.lvt_speaker4_volume]
+#          speaker: 
+#            - ea6296e6dbf37ab7c116e12ef222161e
+#            - speaker2w
+#            - number.lvt_speaker4_volume]
 
 

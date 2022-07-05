@@ -4,15 +4,9 @@ lvt:
       speaker: speaker2w
       utterance: 
         - первая команда
-      data: 
-        var1: "12345"
-
     - intent: SecondCommandIntent
       utterance:
         - вторая команда
-      data:
-        var1: "12345"
-
 
 intent_script:
   FirstCommandIntent:

@@ -1,0 +1,43 @@
+script:
+  script_lvt_test_listening:
+    alias: LVT test listening start
+    sequence:
+      - service: lvt.listening_start
+        data:
+          importance: '2'
+          say: 
+            - Включение режима распознавание без словаря
+            - Активация распознавания без словаря
+          prompt:
+            - Микрофон включен
+            - Я вас слушаю
+        
+          intent: TestListeningIntent
+
+          default_intent: TestListeningCancelIntent
+          default_timeout: 60
+          default_say:
+            - Время ожидания истекло
+
+  script_lvt_test_listening_stop:
+    alias: LVT test listening stop
+    sequence:
+      - service: lvt.listening_stop
+        data:
+          say: "ожидание прервано сервером"
+          importance: '2'
+
+
+intent_script:
+  TestListeningIntent:
+    speech: 
+      text: "Распознано: {{text}}"
+    action:
+      - service: persistent_notification.create
+        data:
+          message: "{{text}}"
+          title: "Распознанный текст"
+
+  TestListeningCancelIntent:
+    speech: 
+      text: "Listening Cancelled"

@@ -19,6 +19,8 @@ from .const import (
     MSG_API_ERROR,
     MSG_API_FIRE_INTENT,
     MSG_API_NEGOTIATE,
+    MSG_API_LISTENING_START,
+    MSG_API_LISTENING_STOP,
     MSG_API_PLAY,
     MSG_API_RESTART,
     MSG_API_SAY,
@@ -81,6 +83,12 @@ class LvtApi:
         hass.services.async_register(DOMAIN, "say", self.handle_say)
         hass.services.async_register(DOMAIN, "confirm", self.handle_confirm)
         hass.services.async_register(DOMAIN, "negotiate", self.handle_negotiate)
+        hass.services.async_register(
+            DOMAIN, "listening_start", self.handle_listening_start
+        )
+        hass.services.async_register(
+            DOMAIN, "listening_stop", self.handle_listening_stop
+        )
         hass.services.async_register(DOMAIN, "restart_speaker", self.handle_restart)
         self.__loaded_platforms = set()
 
@@ -91,6 +99,8 @@ class LvtApi:
         self.hass.services.async_remove(DOMAIN, "say")
         self.hass.services.async_remove(DOMAIN, "confirm")
         self.hass.services.async_remove(DOMAIN, "negotiate")
+        self.hass.services.async_remove(DOMAIN, "listening_start")
+        self.hass.services.async_remove(DOMAIN, "listening_stop")
         self.hass.services.async_remove(DOMAIN, "restart_speaker")
 
     def configure_connection(
@@ -366,7 +376,6 @@ class LvtApi:
                                 await ws.close()
 
                         if msg == MSG_API_SERVER_STATUS:  # LVT Server status message
-                            await self._async_update_server_status(data)
                             if "Terminals" in data:
                                 for _, speaker in data["Terminals"].items():
                                     await self._async_update_speaker_status(speaker)
@@ -474,8 +483,8 @@ class LvtApi:
             except aiohttp.ClientConnectionError as e:
                 self.log_warning("Error connecting server: %s", str(e))
                 await asyncio.sleep(5)
-            except Exception as e:
-                self.log_error("API error [%s]: %s", type(e).__name__, str(e))
+            except Exception as ex:
+                self.log_error("API error [%s]: %s", type(e).__name__, str(ex))
                 await asyncio.sleep(5)
             except:
                 self.log_debug("API client stopped")
@@ -486,14 +495,6 @@ class LvtApi:
     # endregion
 
     # region speaker manipulation: update, delete, create etc ###################
-    async def _async_update_server_status(self, info: dict[str, any]):
-        """Update server entities with LVT server data"""
-        try:
-            pass
-        except Exception as e:
-            self.log_error(
-                "Error [%s] updating LVT Server status %s ", type(e).__name__, str(e)
-            )
 
     async def _async_update_speaker_status(self, info: dict[str, any]):
         """Update speaker entities with LVT data
@@ -607,7 +608,7 @@ class LvtApi:
             self.log_error("LVT config: %s: Invalid intent definition", parent)
 
         for key in icfg:
-            if key not in ["intent", "speaker", "utterance", "data"]:
+            if key not in ["intent", "speaker", "utterance"]:
                 self.log_error('LVT config: %s: Unknown property "%s" ', parent, key)
                 return None
 
@@ -646,22 +647,10 @@ class LvtApi:
         else:
             speakers = []
 
-        if "data" in icfg:
-            if isinstance(icfg["data"], dict) or isinstance(icfg["data"], dict):
-                data = dict(icfg["data"])
-            else:
-                self.log_error(
-                    'LVT config: %s: "data" should be the dictionary', parent
-                )
-                return None
-        else:
-            data = None
-
         return {
             "Intent": str(icfg["intent"]),
             "Terminals": speakers,
             "Utterance": utterance,
-            "Data": data,
         }
 
     def parse_intents(self, config) -> bool:
@@ -779,7 +768,6 @@ class LvtApi:
                     "Не согласен",
                     "Ни в коем случае",
                 ],
-                "Data": call.data.get("no_data", {}),
             }
         )
         options.append(
@@ -795,7 +783,6 @@ class LvtApi:
                     "Продолжай",
                     "Безусловно",
                 ],
-                "Data": call.data.get("yes_data", {}),
             }
         )
 
@@ -809,7 +796,6 @@ class LvtApi:
             "DefaultIntent": call.data.get("default_intent", None),
             "DefaultTimeout": call.data.get("default_timeout", None),
             "DefaultUtterance": call.data.get("default_utterance", None),
-            "DefaultData": call.data.get("default_data", None),
         }
         self.send_message(MSG_API_NEGOTIATE, data=data)
 
@@ -854,8 +840,6 @@ class LvtApi:
                         options[o]["Utterance"] = value
                     elif n[2] == "say":
                         options[o]["Say"] = value
-                    elif n[2] == "data":
-                        options[o]["Data"] = value
                     else:
                         self.log_error("Invalid LVT negotiate option: %s", name)
                 else:
@@ -871,9 +855,68 @@ class LvtApi:
             "DefaultIntent": call.data.get("default_intent", None),
             "DefaultTimeout": call.data.get("default_timeout", None),
             "DefaultUtterance": call.data.get("default_utterance", None),
-            "DefaultData": call.data.get("default_data", None),
         }
         self.send_message(MSG_API_NEGOTIATE, data=data)
+
+    # endregion
+
+    # region handle_listening_start / handle_listening_stop #####################
+    async def handle_listening_start(self, call):
+        """Handle "listening_start" service call."""
+        if not self.online:
+            return
+        speakers = self.get_call_speakers(call)
+        importance = self.get_call_importance(call)
+        if not bool(call.data.get("say", None)):
+            self.log_error("lvt.listening_start: Параметр say не задан")
+            return
+        if not bool(call.data.get("prompt", None)):
+            self.log_error("lvt.listening_start: Параметр prompt не задан")
+            return
+        if not bool(speakers):
+            self.log("lvt.listening_start: Подходящие терминалы не найдены")
+            return
+        if not bool(call.data.get("intent", None)):
+            self.log_error("lvt.listening_start: Параметр intent не задан")
+            return
+
+        self.synchronize_speakers()
+
+        model = list(str(str(call.data.get("model", "f")) + ":").partition(":"))[0]
+
+        data = {
+            "Say": call.data.get("say", None),
+            "Importance": importance,
+            "Terminals": speakers,
+            "Model": "d" if model == "d" else "f",
+            "Prompt": call.data.get("prompt", None),
+            "Intent": call.data.get("intent", None),
+            "DefaultSay": call.data.get("default_say", None),
+            "DefaultIntent": call.data.get("default_intent", None),
+            "DefaultTimeout": call.data.get("default_timeout", None),
+        }
+        self.send_message(MSG_API_LISTENING_START, data=data)
+
+    async def handle_listening_stop(self, call):
+        """Handle "listening_stop" service call."""
+        if not self.online:
+            return
+        speakers = self.parse_speakers(call.data.get("speaker", None), True)
+        speakerIds = [speaker.id for speaker in speakers]
+
+        if not bool(speakerIds):
+            self.log("lvt.listening_stop: подходящие терминалы не найдены")
+            return
+
+        self.synchronize_speakers()
+        say = call.data.get("say", None)
+        data = {
+            "Intent": call.data.get("intent", None),
+            "Say": say,
+            "Importance": 2,
+            "Terminals": speakerIds,
+        }
+        self.send_message(MSG_API_LISTENING_STOP, data=data)
 
     # endregion
 

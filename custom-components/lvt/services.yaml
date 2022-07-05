@@ -119,7 +119,7 @@ confirm:
     default_timeout:
       name: Timeout
       description: Time (seconds) to wait user answer
-      required: true
+      required: false
       default: 30
 
       selector:
@@ -131,7 +131,7 @@ confirm:
     default_intent:
       name: Default intent name
       description: Intent name to fire if user not answered befor timeout
-      required: true
+      required: false
       selector:
         text:
 
@@ -162,8 +162,6 @@ confirm:
       selector:
         device:
           integration: lvt
-
-
 
 ##################################################################################################
 negotiate:
@@ -312,7 +310,7 @@ negotiate:
     default_timeout:
       name: Timeout
       description: Time (seconds) to wait user answer
-      required: true
+      required: false
       default: 30
 
       selector:
@@ -324,7 +322,7 @@ negotiate:
     default_intent:
       name: Default intent name
       description: Intent name to fire if user not answered befor timeout
-      required: true
+      required: false
       selector:
         text:
 
@@ -334,6 +332,117 @@ negotiate:
       required: false
       selector:
         text:
+
+##################################################################################################
+listening_start:
+  name: Start continuous recognition
+  description: Turn continuous recognition mode on
+  fields:
+    say:
+      name: Text
+      description: Text to say before listening starts
+      required: true
+      selector:
+        text:
+
+    prompt:
+      name: Prompt
+      description: Periodical reminder text is active
+      required: true
+      selector:
+        text:
+
+    intent:
+      name: Intent name
+      description: To be triggered every time LVT recognize a phase
+      required: true
+      selector:
+        text:
+
+    model:
+      name: Speech recognition Model
+      description: Preferable speech recognition model
+      required: false
+      default: "f: Large model used for unrestricted voice recognition"
+      selector:
+        select:
+          options:
+            - "f: Large model used for unrestricted voice recognition"
+            - "d: Light model for vocabulary-restricted recognition"
+
+    default_timeout:
+      name: Timeout
+      description: Time (seconds) to wait user answer
+      required: false
+      default: 30
+      selector:
+        number:
+          min: 10
+          max: 600
+          unit_of_measurement: "seconds"
+
+    default_say:
+      name: Cancel confirmation
+      description: Text to confirm default value
+      required: false
+      selector:
+        text:
+
+    default_intent:
+      name: Default intent name
+      description: Intent name to fire if user not answered befor timeout
+      required: false
+      selector:
+        text:
+
+    speaker:
+      name: List of speaker IDs
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+    importance:
+      name: Importance level
+      description: Respect speaker importance filter settings
+      required: false
+      default: "0: Common chattering"
+      selector:
+        select:
+          options:
+            - "0: Common chattering"
+            - "1: Informational message"
+            - "2: Important message"
+            - "3: Critically important message"
+
+##################################################################################################
+listening_stop:
+  name: Stop continuous recognition
+  description: Turn continuous recognition mode off
+  fields:
+    intent:
+      name: Intent name
+      description: To be triggered every time LVT recognize a phase
+      required: false
+      selector:
+        text:
+
+    speaker:
+      name: List of speaker IDs
+      description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
+      required: false
+      selector:
+        device:
+          integration: lvt
+
+    say:
+      name: Text
+      description: Text to say before listening starts
+      required: false
+      selector:
+        text:
+
 
 ##################################################################################################
 restart_speaker:

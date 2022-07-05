@@ -60,6 +60,12 @@ MSG_API_SAY: Final = "Say"
 # Запустить диалог выбора варианта из списка возможных
 MSG_API_NEGOTIATE: Final = "Negotiate"
 
+# Активировать режим прослушивания без использования словаря
+MSG_API_LISTENING_START: Final = "ListeningStart"
+
+# Выключить режим прослушивания
+MSG_API_LISTENING_STOP: Final = "ListeningStop"
+
 # Запустить диалог выбора варианта из списка возможных
 MSG_API_RESTART: Final = "Restart"
 
