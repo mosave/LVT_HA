@@ -40,16 +40,17 @@ class LvtVolumeEntity(NumberEntity, LvtEntity):
         self._attr_name = VOLUME_TITLE.format(self.speaker_id)
         self._attr_assumed_state = False
         self._attr_mode = NumberMode.SLIDER
-        self._attr_min_value = 0
-        self._attr_max_value = 100
-        self._attr_step = 10
-        self._attr_value = 30
+        self._attr_native_min_value = 0
+        self._attr_native_max_value = 100
+        self._attr_native_step = 10
+        self._attr_native_value = 30
+
         LVT_NUMBER_ADD_ENTITIES([self])
 
-    def set_value(self, value: int) -> None:
+    def set_native_value(self, value: int) -> None:
         """Update the current value."""
         if self.enabled:
-            is_updated = int(self._attr_value) != int(value)
-            self._attr_value = value
+            is_updated = int(self._attr_native_value) != int(value)
+            self._attr_native_value = value
             if is_updated:
                 self.schedule_update_ha_state()

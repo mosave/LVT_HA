@@ -180,7 +180,7 @@ class LvtSpeaker:
         if "volume" in self.entities:
             self.entities["volume"].set_online(self.online)
             if "Volume" in self.__info:
-                self.entities["volume"].set_value(int(self.__info["Volume"]))
+                self.entities["volume"].set_native_value(int(self.__info["Volume"]))
 
         if "filter" in self.entities:
             self.entities["filter"].set_online(self.online)
