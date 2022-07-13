@@ -5,6 +5,7 @@ script:
       - service: lvt.listening_start
         data:
           importance: '2'
+#          volume: 75
           say: 
             - Включение режима распознавание без словаря
             - Активация распознавания без словаря

@@ -1,4 +1,5 @@
 """LVT support for notify component."""
+from socket import NI_NAMEREQD
 from typing import Any
 import voluptuous as vol
 from config.custom_components.lvt.lvt import LvtApi
@@ -15,6 +16,7 @@ from homeassistant.components.notify import (
 
 CONF_SPEAKER = "speaker"
 CONF_IMPORTANCE = "importance"
+CONF_VOLUME = "volume"
 CONF_PLAY = "play"
 CONF_SAY = "say"
 
@@ -24,6 +26,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         vol.Required(CONF_IMPORTANCE): cv.string,
         vol.Optional(CONF_PLAY, default=""): cv.string,
         vol.Optional(CONF_SAY, default=""): cv.string,
+        vol.Optional(CONF_VOLUME, default=""): cv.string,
     }
 )
 
@@ -40,6 +43,16 @@ class LVTNotificationService(BaseNotificationService):
         """Initialize the service."""
         self.speaker = config[CONF_SPEAKER]
         self.importance = config[CONF_IMPORTANCE]
+        if config[CONF_VOLUME] is not None:
+            try:
+                self.volume = int(config[CONF_VOLUME])
+                if self.volume < 0:
+                    self.volume = 0
+                elif self.volume > 100:
+                    self.volume = 100
+            except:
+                self.volume = None
+
         say_template = config[CONF_SAY]
         if bool(config[CONF_PLAY]):
             self.play = template.Template(config[CONF_PLAY], hass)
@@ -64,6 +77,7 @@ class LVTNotificationService(BaseNotificationService):
         speaker = kwargs.get("trigger")
         data["speaker"] = speaker if bool(speaker) else self.speaker
         data["importance"] = self.importance
+        data["volume"] = self.volume
 
         if self.play is not None:
             data["play"] = self.play.async_render(kwargs)

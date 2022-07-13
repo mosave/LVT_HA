@@ -43,7 +43,7 @@ class LvtVolumeEntity(NumberEntity, LvtEntity):
         self._attr_native_min_value = 0
         self._attr_native_max_value = 100
         self._attr_native_step = 10
-        self._attr_native_value = 30
+        self._attr_native_value = 50
 
         LVT_NUMBER_ADD_ENTITIES([self])
 

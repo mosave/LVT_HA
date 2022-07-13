@@ -5,6 +5,7 @@ script:
       - service: lvt.confirm
         data:
           importance: '2: Important message'
+#          volume: 75             # Громкость (необязательный)
           say: 
             - Вы уверены в том что хотите сделать что-то важное?
             - Правда ли вы хотите это сделать?

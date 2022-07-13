@@ -5,6 +5,7 @@ script:
       - service: lvt.negotiate
         data:
           importance: '2: Important message'
+#          volume: 75
           say: 
             - Как вы считаете, что вкуснее - груши или яблоки?
             - Скажите, а что вам больше нравится - груши или яблоки?

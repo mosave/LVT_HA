@@ -711,8 +711,15 @@ class LvtApi:
 
         self.synchronize_speakers()
 
-        data = {"Sound": sound, "Importance": importance, "Terminals": speakers}
-        self.send_message(MSG_API_PLAY, data=data)
+        self.send_message(
+            MSG_API_PLAY,
+            data={
+                "Sound": sound,
+                "Importance": importance,
+                "Terminals": speakers,
+                "Volume": call.data.get("volume", None),
+            },
+        )
 
     # endregion
 
@@ -735,8 +742,15 @@ class LvtApi:
 
         self.synchronize_speakers()
 
-        data = {"Say": text, "Importance": importance, "Terminals": speakers}
-        self.send_message(MSG_API_SAY, data=data)
+        self.send_message(
+            MSG_API_SAY,
+            data={
+                "Say": text,
+                "Importance": importance,
+                "Terminals": speakers,
+                "Volume": call.data.get("volume", None),
+            },
+        )
 
     # endregion
 
@@ -786,18 +800,21 @@ class LvtApi:
             }
         )
 
-        data = {
-            "Say": say,
-            "Importance": importance,
-            "Terminals": speakers,
-            "Prompt": call.data.get("prompt", None),
-            "Options": options,
-            "DefaultSay": call.data.get("default_say", None),
-            "DefaultIntent": call.data.get("default_intent", None),
-            "DefaultTimeout": call.data.get("default_timeout", None),
-            "DefaultUtterance": call.data.get("default_utterance", None),
-        }
-        self.send_message(MSG_API_NEGOTIATE, data=data)
+        self.send_message(
+            MSG_API_NEGOTIATE,
+            data={
+                "Say": say,
+                "Importance": importance,
+                "Volume": call.data.get("volume", None),
+                "Terminals": speakers,
+                "Prompt": call.data.get("prompt", None),
+                "Options": options,
+                "DefaultSay": call.data.get("default_say", None),
+                "DefaultIntent": call.data.get("default_intent", None),
+                "DefaultTimeout": call.data.get("default_timeout", None),
+                "DefaultUtterance": call.data.get("default_utterance", None),
+            },
+        )
 
     # endregion
 
@@ -848,6 +865,7 @@ class LvtApi:
         data = {
             "Say": say,
             "Importance": importance,
+            "Volume": call.data.get("volume", None),
             "Terminals": speakers,
             "Prompt": call.data.get("prompt", None),
             "Options": options,

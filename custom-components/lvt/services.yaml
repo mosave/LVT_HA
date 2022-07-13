@@ -23,6 +23,17 @@ play:
             - "1: Informational message"
             - "2: Important message"
             - "3: Critically important message"
+
+    volume:
+      name: Volume
+      description: Временная громкость
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+
     speaker:
       name: "[List of] speaker IDs"
       description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
@@ -55,6 +66,15 @@ say:
             - "1: Informational message"
             - "2: Important message"
             - "3: Critically important message"
+    volume:
+      name: Volume
+      description: Временная громкость
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
     speaker:
       name: List of speaker IDs
       description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
@@ -83,6 +103,16 @@ confirm:
       required: false
       selector:
         text:
+
+    volume:
+      name: Volume
+      description: Временная громкость
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
 
     ### YES
     yes_intent:
@@ -187,6 +217,16 @@ negotiate:
             - "1: Informational message"
             - "2: Important message"
             - "3: Critically important message"
+    volume:
+      name: Volume
+      description: Временная громкость
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+
     speaker:
       name: List of speaker IDs
       description: Any of LVT speaker id, HA device id, unique id, device entity id or location id are accepted
@@ -351,6 +391,16 @@ listening_start:
       required: true
       selector:
         text:
+
+    volume:
+      name: Volume
+      description: Временная громкость
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
 
     intent:
       name: Intent name

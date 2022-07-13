@@ -91,7 +91,7 @@ class LvtSpeaker:
         """Speaker volume"""
         if "volume" in self.entities:
             return int(self.entities["volume"].value)
-        return 30
+        return 50
 
     @property
     def out_of_sync(self) -> bool:
