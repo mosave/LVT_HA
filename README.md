@@ -79,7 +79,7 @@ lvt
 
 ```
 <utterance> ::=  UTTERANCE {UTTERANCE}
-UTTERANCE ::= WORD | [VARIABLE:]"?" | [VARIABLE:]"*" | [VARIABLE=]"["LIST"]" | [VARIABLE=]"<"DICTIONARY">"
+UTTERANCE ::= WORD | [VARIABLE=]"?" | [VARIABLE=]"*" | [VARIABLE=]"["LIST"]" | [VARIABLE=]"<"DICTIONARY">"
 LIST ::= [VALUE=]WORD {WORD} { "," [VALUE=] WORD {WORD} }
 
 WORD     - слово на распознаваемом языке, зависит от конфигурации сервера
