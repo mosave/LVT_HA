@@ -5,8 +5,6 @@ notify:
                            # Значение параметра target, переданное при вызове оповещения, имеет более высокий приоритет
     importance: 3          # Важность сообщения (обязательный параметр)
 #    volume: 75             # Громкость (необязательный)
-#    play: ding.wav        # Звук, который необходимо проиграть при оповещении
-#    say: "{{ message }}"  # По умолчанию (параметр не задан) будет проговорен переданный заголовок и текст оповещения
 
 
 input_boolean:
@@ -15,7 +13,8 @@ input_boolean:
 
 alert:
   lvt_test_alert:
-    name: LVT оповещение активно
+    name: "lvt_test_alert"
+    message: "LVT оповещение активно"
     done_message: LVT оповещение деактивировано
     entity_id: input_boolean.alert_trigger
     repeat: 1
